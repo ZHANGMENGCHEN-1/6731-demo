@@ -77,3 +77,79 @@ def make_summary(comparison, start, end):
         parts.append("；".join(leaders) + "。")
     parts.append("仅凭这些结算后持仓变化不能确认 Participant 之间存在直接筹码转移关系，也不能推断最终投资者买卖或实时成交方向。")
     return "".join(parts)
+
+
+def get_dataset_info():
+    dates = [day.isoformat() for day in discover_snapshots()]
+    return {"stock_code": "06731", "listing_date": "2026-09-29", "dates": dates,
+            "date_count": len(dates), "earliest_date": dates[0] if dates else None,
+            "latest_date": dates[-1] if dates else None,
+            "persistent_definition": "在全部相邻已有快照间均严格增加或减少；任一间隔不变即排除。缺席持仓按零，不代表每日交易。"}
+
+
+def compare_dates(start_date, end_date):
+    start = date.fromisoformat(str(start_date))
+    end = date.fromisoformat(str(end_date))
+    snapshots = discover_snapshots()
+    if start >= end:
+        raise ValueError("开始日期必须早于结束日期。")
+    if start not in snapshots or end not in snapshots:
+        raise ValueError("所选日期没有本地真实快照。")
+    return compare_snapshots(load_snapshot(snapshots[start]), load_snapshot(snapshots[end]))
+
+
+def _check_top_n(top_n):
+    if isinstance(top_n, bool) or not isinstance(top_n, int) or top_n < 1:
+        raise ValueError("top_n 必须是正整数。")
+
+
+def get_top_increases(start_date, end_date, top_n=10):
+    _check_top_n(top_n)
+    comparison = compare_dates(start_date, end_date)
+    return comparison[comparison.shares_change > 0].nlargest(top_n, "shares_change")
+
+
+def get_top_decreases(start_date, end_date, top_n=10):
+    _check_top_n(top_n)
+    comparison = compare_dates(start_date, end_date)
+    return comparison[comparison.shares_change < 0].nsmallest(top_n, "shares_change")
+
+
+def get_participant_history(participant_id):
+    participant_id = participant_id.strip().upper()
+    if not re.fullmatch(r"[A-Z]\d{5}", participant_id):
+        raise ValueError("Participant ID 格式应类似 B01228。")
+    records = []
+    for day, path in discover_snapshots().items():
+        row = load_snapshot(path).set_index("participant_id")
+        if participant_id in row.index:
+            item = row.loc[participant_id]
+            records.append({"date": str(day), "participant_id": participant_id, **item.to_dict(), "present": True})
+        else:
+            records.append({"date": str(day), "participant_id": participant_id, "participant_name": "",
+                            "address": "", "shares": 0, "percentage": 0.0, "present": False})
+    result = pd.DataFrame(records, columns=["date", *COLUMNS, "present"])
+    result["shares_change"] = result.shares.diff().astype("Int64")
+    return result
+
+
+def _persistent_changes(direction):
+    snapshots = discover_snapshots()
+    if len(snapshots) < 2:
+        raise ValueError("持续变化分析至少需要两个真实日期。")
+    frames = [load_snapshot(path) for path in snapshots.values()]
+    matrix = pd.concat([frame.set_index("participant_id").shares for frame in frames], axis=1).fillna(0)
+    delta = matrix.diff(axis=1).iloc[:, 1:]
+    eligible = (delta > 0).all(axis=1) if direction == "increase" else (delta < 0).all(axis=1)
+    result = compare_snapshots(frames[0], frames[-1])
+    result = result[result.participant_id.isin(matrix.index[eligible])].copy()
+    result["interval_count"] = len(frames) - 1
+    return result.sort_values("shares_change", ascending=direction != "increase").reset_index(drop=True)
+
+
+def get_persistent_increases():
+    return _persistent_changes("increase")
+
+
+def get_persistent_decreases():
+    return _persistent_changes("decrease")
