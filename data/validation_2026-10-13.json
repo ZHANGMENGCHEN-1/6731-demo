@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-13",
+  "stock": "06731",
+  "participants": 107,
+  "total_shares": 359717170,
+  "all_passed": true,
+  "checks": [
+    {
+      "participant_id": "A00005",
+      "participant_name": "CHINA SECURITIES DEPOSITORY AND CLEARING",
+      "shares": 309717870,
+      "percentage": 83.8,
+      "passed": true
+    },
+    {
+      "participant_id": "B01228",
+      "participant_name": "CITIC SECURITIES BROKERAGE (HK) LTD",
+      "shares": 21868100,
+      "percentage": 5.91,
+      "passed": true
+    },
+    {
+      "participant_id": "B01900",
+      "participant_name": "ORIENT SECURITIES (HONG KONG) LTD",
+      "shares": 7842300,
+      "percentage": 2.12,
+      "passed": true
+    },
+    {
+      "participant_id": "B01654",
+      "participant_name": "CHINA INTERNATIONAL CAPITAL CORPORATION",
+      "shares": 4128900,
+      "percentage": 1.11,
+      "passed": true
+    },
+    {
+      "participant_id": "B01138",
+      "participant_name": "CLSA LTD",
+      "shares": 2985900,
+      "percentage": 0.8,
+      "passed": true
+    },
+    {
+      "participant_id": "B01955",
+      "participant_name": "FUTU SECURITIES INTERNATIONAL",
+      "shares": 2926810,
+      "percentage": 0.79,
+      "passed": true
+    },
+    {
+      "participant_id": "C00010",
+      "participant_name": "CITIBANK N.A.",
+      "shares": 2882969,
+      "percentage": 0.78,
+      "passed": true
+    }
+  ]
+}
