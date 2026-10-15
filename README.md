@@ -11,9 +11,25 @@ python -m streamlit run app.py
 
 无需调用 `streamlit.exe`。页面仅从本地 CSV 读取，不发出网络请求。
 
+## 每日增量更新
+
+外部定时器每天执行一次，无需启动 Streamlit：
+
+```powershell
+F:\code\.venv\Scripts\python.exe F:\code\fetch_latest.py
+```
+
+Windows 任务计划程序中，程序填 `F:\code\.venv\Scripts\python.exe`，参数填 `F:\code\fetch_latest.py`，起始目录填 `F:\code`。此项目未自动创建系统定时任务。
+
+入口读取 HKEX 实际查询表单中的默认最新持仓日期，从本地最新日期的下一日依次查询；无本地真实数据时从上市日开始。复用 `fetch_ccass.fetch_day` 的表单、解析和验证逻辑，串行执行，每日查询后等待 2.5 秒。周末/未发布快照正常跳过；已是最新时正常退出。不会修补本地最新日期之前的历史缺口，该需求仍可使用原手动抓取命令。
+
+CSV 完整写入临时文件后原子发布，不覆盖已有文件；网站或网络异常停止并返回非零退出码，保留之前成功保存的数据。日志同时输出终端和 `logs/fetch_latest.log`，时间采用 UTC+8，日志自动轮转。看板下次刷新或交互时自动扫描新 CSV；已经打开且没有交互的网页不会主动轮询。定时器与看板必须使用同一份持久化 data 目录，远程部署需另行保证数据同步。
+
 ## AI 分析助手框架
 
-默认打开「💬 AI 分析助手」，通过侧边栏切换至保留的「📊 CCASS Dashboard」。
+默认打开「06731 持仓监控看板」，AI 分析助手保留为侧边栏第二入口。
+看板包含最新与上市以来的变化、Top 5 / Top 10、近期持续趋势、单机构历史曲线、自定义日期对比及查册校验占位区域。
+最新交易日栏目使用最近两个已有周一至周五快照，未接入完整交易所日历；最新数据日期仍按全部本地真实文件统计。
 聊天支持推荐问题、手动输入、session 内历史记录和清空对话。切换页面或 rerun 不清空聊天；刷新浏览器或开启新 session 不保证保留。
 
 - `agent.py`：整理上下文、识别候选工具、执行真实 Python 分析、构造未来 LLM 消息，返回明确占位回复。
@@ -21,7 +37,7 @@ python -m streamlit run app.py
 - 勾选「开发模式：显示 Agent Debug」可查看候选工具、参数、日期范围、真实结果和错误；这些不是模型回答。
 - 无明确日期时，「最近」使用最新两个已有快照，否则使用全部已有日期。明确给出的日期缺少快照时报告错误，不替换为其他日期。当前规则不解析历史消息的省略指代。
 - `analysis.py` 新增七个工具接口：`compare_dates`、`get_top_increases`、`get_top_decreases`、`get_participant_history`、`get_persistent_increases`、`get_persistent_decreases`、`get_dataset_info`。
-- 「持续」指全部相邻已有快照之间均严格增加或减少，不变即排除；非每日交易判断。当前数据含不变区间，因此严格持续变化结果可能为空。
+- 「持续」采用近期趋势口径：最近最多 6 个已有工作日快照、至少 3 个区间同向变化、同向变化量占总绝对变化量至少 70%，且窗口净变化同向。允许不变或小幅反向变化，至少需要 4 个工作日快照。页面列出窗口和统计数，不代表每日交易。
 
 已接入智谱 Chat Completions，地址为 `https://open.bigmodel.cn/api/paas/v4/chat/completions`。配置 Key 后，提交问题会调用模型并消耗额度；普通页面加载和 Dashboard 不调用模型。请求使用 Bearer 鉴权、`stream=true`、`thinking.type=enabled`、`reasoning_effort=low`。SSE 正文到达后立即逐段展示，完成后保存到聊天记录；不展示模型内部推理字段。若响应中断，以明确错误替换未完成正文。当前仍由本地规则选择工具，模型负责基于工具结果解读，并非模型自主选择工具。
 

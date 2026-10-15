@@ -15,7 +15,7 @@ from ui import apply_styles, render_notice
 
 st.set_page_config(page_title="06731 · CCASS Research", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
 if "page" not in st.session_state:
-    st.session_state.page = "💬 AI 分析助手"
+    st.session_state.page = "📊 CCASS Dashboard"
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "agent_runs" not in st.session_state:
@@ -36,8 +36,8 @@ apply_styles(assistant=page == "💬 AI 分析助手")
 with st.sidebar:
     st.html('<div class="cc-brand"><div class="cc-brand-icon">◈</div><div><strong>CCASS Research</strong><small>06731 · WORKSPACE</small></div></div>')
     st.html('<div class="cc-section">工作空间</div>')
-    for label, key, icon in (("AI 分析助手", "nav_assistant", ":material/chat_bubble_outline:"),
-                             ("CCASS Dashboard", "nav_dashboard", ":material/bar_chart:")):
+    for label, key, icon in (("06731 持仓监控看板", "nav_dashboard", ":material/bar_chart:"),
+                             ("AI 分析助手", "nav_assistant", ":material/chat_bubble_outline:")):
         target = "💬 AI 分析助手" if key == "nav_assistant" else "📊 CCASS Dashboard"
         st.button(label, key=key, icon=icon, width="stretch", type="primary" if page == target else "secondary",
                   on_click=change_page, args=(target,))
@@ -121,74 +121,6 @@ if page == "💬 AI 分析助手":
     render_assistant(typed)
     st.stop()
 
-st.html('''<div class="cc-hero"><div class="cc-eyebrow">HOLDINGS OVERVIEW / 06731</div>
-<h1>06731 上市后 CCASS 持仓变化监控</h1>
-<p>对比不同日期的结算后持仓，观察 Participant 层面的分布变化。</p></div>''')
-st.caption("内部 Demo · HKEX CCASS 每日快照 · 本地 CSV")
-render_notice()
-snapshots = discover_snapshots()
-dates = list(snapshots)
-a, b, c, d = st.columns(4)
-a.metric("股票代码", "06731")
-b.metric("上市日期", "2026-09-29")
-c.metric("当前数据最新日期", str(dates[-1]) if dates else "暂无")
-d.metric("已获取数据日期数", len(dates))
-st.caption("来源：香港交易所 CCASS Shareholding Search。数据最新日期按本地文件统计，并非实时查询；上市日期按项目指定。")
-st.markdown("[查看 HKEX 查询页面](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx)")
-if len(dates) < 2:
-    st.info("至少需要两个真实日期的 CSV。请先运行 python fetch_ccass.py 06731 2026-09-29 2026-10-13")
-    st.stop()
-left, right = st.columns(2)
-start = left.selectbox("开始日期", dates, index=0)
-end = right.selectbox("结束日期", dates, index=len(dates) - 1)
-if start >= end:
-    st.info("开始日期必须早于结束日期。")
-    st.stop()
-try:
-    comparison = compare_snapshots(load_snapshot(snapshots[start]), load_snapshot(snapshots[end]))
-except (ValueError, OSError, OverflowError) as exc:
-    st.error(f"数据读取失败：{exc}")
-    st.stop()
-increases, decreases = top_changes(comparison)
-st.subheader("主要持仓变化")
-left, right = st.columns(2)
-for column, frame, direction in ((left, increases, "增加"), (right, decreases, "减少")):
-    with column:
-        if frame.empty:
-            st.metric(f"持仓{direction}股数", "0 股")
-            st.caption(f"所选期间无持仓{direction}的 Participant。")
-        else:
-            row = frame.iloc[0]
-            st.metric(f"持仓{direction}股数（最多）", f"{abs(int(row.shares_change)):,} 股")
-            st.write(f"持仓{direction}最多的 Participant：**{row.participant_name}**（{row.participant_id}）")
-st.subheader("规则总结")
-st.info(make_summary(comparison, start, end))
-st.caption("计算口径：结束持仓 − 起始持仓；占比变化单位为百分点。仅出现于一日的 Participant，另一日按 0 处理。股数和占比均直接读取 HKEX，未对占比重新归一化。")
+from dashboard import render_dashboard
 
-LABELS = {"participant_id": "Participant ID", "participant_name": "Participant Name", "address": "地址",
-          "start_shares": "起始持仓", "end_shares": "结束持仓", "shares_change": "持仓变化",
-          "start_percentage": "起始占比（%）", "end_percentage": "结束占比（%）", "percentage_change": "占比变化（百分点）"}
-
-
-def show_table(frame, include_address=False):
-    if not include_address:
-        frame = frame.drop(columns="address")
-    st.dataframe(frame.rename(columns=LABELS).style.format({
-        "起始持仓": "{:,.0f}", "结束持仓": "{:,.0f}", "持仓变化": "{:+,.0f}",
-        "起始占比（%）": "{:.2f}", "结束占比（%）": "{:.2f}", "占比变化（百分点）": "{:+.2f}",
-    }), hide_index=True, width="stretch")
-
-
-for title, frame, color in (("持仓增加 Top 10", increases, "#167d9a"), ("持仓减少 Top 10", decreases, "#b95858")):
-    st.subheader(title)
-    if frame.empty:
-        st.caption("所选期间没有符合条件的 Participant。")
-    else:
-        chart = frame.assign(label=frame.participant_id + " · " + frame.participant_name)
-        st.bar_chart(chart, x="label", y="shares_change", color=color, x_label="Participant", y_label="持仓变化（股）")
-        show_table(frame)
-st.subheader("完整持仓变化对比")
-show_table(comparison, include_address=True)
-st.download_button("下载完整对比 CSV", comparison.to_csv(index=False).encode("utf-8-sig"),
-                   file_name=f"06731_ccass_changes_{start}_{end}.csv", mime="text/csv")
-st.caption("只读取 data/ccass_YYYY-MM-DD.csv，旧 sample_ccass 模拟文件不参与分析。非查询日期返回的前一日快照不另存为当天数据。")
+render_dashboard()

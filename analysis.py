@@ -84,7 +84,7 @@ def get_dataset_info():
     return {"stock_code": "06731", "listing_date": "2026-09-29", "dates": dates,
             "date_count": len(dates), "earliest_date": dates[0] if dates else None,
             "latest_date": dates[-1] if dates else None,
-            "persistent_definition": "在全部相邻已有快照间均严格增加或减少；任一间隔不变即排除。缺席持仓按零，不代表每日交易。"}
+            "persistent_definition": PERSISTENT_DEFINITION}
 
 
 def compare_dates(start_date, end_date):
@@ -133,18 +133,38 @@ def get_participant_history(participant_id):
     return result
 
 
-def _persistent_changes(direction):
-    snapshots = discover_snapshots()
-    if len(snapshots) < 2:
-        raise ValueError("持续变化分析至少需要两个真实日期。")
-    frames = [load_snapshot(path) for path in snapshots.values()]
+PERSISTENT_DEFINITION = ("近期持续趋势：取最近最多 6 个已有工作日快照（5 个区间），至少 3 个区间同向变化，"
+                         "同向变化量占总绝对变化量至少 70%，且窗口净变化同向；允许不变和小幅反向变化。"
+                         "至少需要 4 个工作日快照。缺席按零；仅为持仓趋势筛选，不代表买卖。")
+
+
+def _persistent_from_frames(snapshots, direction):
+    recent = [(day, frame) for day, frame in snapshots.items() if day.weekday() < 5][-6:]
+    extra = ["interval_count", "direction_count", "direction_share", "window_start", "window_end"]
+    if len(recent) < 4:
+        return pd.DataFrame(columns=["participant_id", "participant_name", "address", "start_shares", "end_shares",
+                                     "shares_change", "start_percentage", "end_percentage", "percentage_change", *extra])
+    frames = [frame for _, frame in recent]
     matrix = pd.concat([frame.set_index("participant_id").shares for frame in frames], axis=1).fillna(0)
     delta = matrix.diff(axis=1).iloc[:, 1:]
-    eligible = (delta > 0).all(axis=1) if direction == "increase" else (delta < 0).all(axis=1)
+    signed = delta if direction == "increase" else -delta
+    counts = (signed > 0).sum(axis=1)
+    gross = delta.abs().sum(axis=1)
+    share = signed.clip(lower=0).sum(axis=1).div(gross.where(gross != 0))
+    net = matrix.iloc[:, -1] - matrix.iloc[:, 0]
+    eligible = (counts >= 3) & (share >= .7) & ((net > 0) if direction == "increase" else (net < 0))
     result = compare_snapshots(frames[0], frames[-1])
     result = result[result.participant_id.isin(matrix.index[eligible])].copy()
     result["interval_count"] = len(frames) - 1
+    result["direction_count"] = result.participant_id.map(counts)
+    result["direction_share"] = result.participant_id.map(share).mul(100)
+    result["window_start"] = str(recent[0][0])
+    result["window_end"] = str(recent[-1][0])
     return result.sort_values("shares_change", ascending=direction != "increase").reset_index(drop=True)
+
+
+def _persistent_changes(direction):
+    return _persistent_from_frames({day: load_snapshot(path) for day, path in discover_snapshots().items()}, direction)
 
 
 def get_persistent_increases():
@@ -153,3 +173,17 @@ def get_persistent_increases():
 
 def get_persistent_decreases():
     return _persistent_changes("decrease")
+
+
+def get_monitoring_data():
+    """看板一次读取本地快照，复用既有对比计算。工作日仅按周一至周五筛选。"""
+    frames = {day: load_snapshot(path) for day, path in discover_snapshots().items()}
+    dates = list(frames)
+    weekdays = [day for day in dates if day.weekday() < 5]
+    recent = weekdays[-6:]
+    return {"frames": frames, "dates": dates, "workdays": weekdays,
+            "latest_comparison": compare_snapshots(frames[weekdays[-2]], frames[weekdays[-1]]) if len(weekdays) >= 2 else None,
+            "listing_comparison": compare_snapshots(frames[dates[0]], frames[dates[-1]]) if len(dates) >= 2 else None,
+            "persistent_increases": _persistent_from_frames(frames, "increase"),
+            "persistent_decreases": _persistent_from_frames(frames, "decrease"),
+            "persistent_window": (recent[0], recent[-1]) if recent else None}
