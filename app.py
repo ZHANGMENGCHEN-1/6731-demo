@@ -61,8 +61,10 @@ def render_assistant(typed=None):
     <p>通过自然语言查询 06731 上市后的 CCASS 持仓变化</p>
     <span class="cc-badge">框架已就绪 · STATUS</span></div>'''.replace("STATUS", llm_status))
     render_notice()
+    snapshot_dates = list(discover_snapshots())
+    latest_label = f"{snapshot_dates[-1].month} 月 {snapshot_dates[-1].day} 日" if snapshot_dates else "最新数据日期"
     questions = ["6731 上市以来筹码主要流向哪里？", "最近哪个 Participant 增持最多？", "谁在持续减持？",
-                 "帮我总结 9 月 29 日到 10 月 13 日的主要持仓变化。", "B01228 的持仓趋势怎么样？"]
+                 f"帮我总结 9 月 29 日到 {latest_label}的主要持仓变化。", "B01228 的持仓趋势怎么样？"]
     selected = None
     with st.expander("从一个问题开始" if not st.session_state.messages else "推荐问题", expanded=not st.session_state.messages):
         st.html('<div class="cc-helper">选择一个问题，或在下方输入你想了解的内容</div>')
