@@ -7,6 +7,21 @@ import analysis
 
 
 class MonitoringTests(unittest.TestCase):
+    def test_home_summary_counts_concentration_and_ties(self):
+        comparison = pd.DataFrame({"participant_id": ["B00001", "B00002", "B00003", "B00004", "B00005", "B00006"],
+                                   "participant_name": ["甲", "乙", "丙", "丁", "戊", "己"],
+                                   "shares_change": [100, 100, 50, 50, -200, 0]})
+        text = "\n".join(analysis.make_home_summary(comparison))
+        self.assertIn("2 家并列", text)
+        self.assertIn("83.3%", text)
+        self.assertIn("100.0%", text)
+        self.assertIn("4 家持仓增加、1 家减少、1 家不变", text)
+        self.assertIn("净变化为增加 100 股", text)
+        flat = comparison.assign(shares_change=0)
+        self.assertIn("均未发生变化", analysis.make_home_summary(flat)[0])
+        one_side = "".join(analysis.make_home_summary(comparison[comparison.shares_change >= 0]))
+        self.assertIn("没有持股数量减少", one_side)
+
     def frames(self):
         dates = [date(2026, 9, 28) + timedelta(days=n) for n in (0, 1, 2, 3, 4, 7)]
         up = [100, 110, 106, 116, 126, 136]

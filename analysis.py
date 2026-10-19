@@ -79,6 +79,38 @@ def make_summary(comparison, start, end):
     return "".join(parts)
 
 
+def make_home_summary(comparison):
+    """首页规则摘要；所有数量及集中度由 Python 计算，不调用 LLM。"""
+    positive = comparison[comparison.shares_change > 0]
+    negative = comparison[comparison.shares_change < 0]
+    unchanged = int((comparison.shares_change == 0).sum())
+    if positive.empty and negative.empty:
+        return [f"所选区间 {len(comparison)} 家 Participant 的持股数量均未发生变化。",
+                "没有持股数量增加或减少的机构；占比变化请查看明细。"]
+
+    leaders = []
+    concentration = []
+    for frame, direction in ((positive, "增加"), (negative, "减少")):
+        if frame.empty:
+            leaders.append(f"没有持股数量{direction}的 Participant")
+            continue
+        magnitude = frame.shares_change.abs()
+        maximum = int(magnitude.max())
+        tied = frame[magnitude == maximum].sort_values("participant_id")
+        row = tied.iloc[0]
+        name = f"{row.participant_name}（{row.participant_id}）"
+        suffix = f"等 {len(tied)} 家并列" if len(tied) > 1 else ""
+        leaders.append(f"{name}{suffix}持仓{direction}最多，{'各' if len(tied) > 1 else ''}{direction} {maximum:,} 股")
+        total = int(magnitude.sum())
+        count = min(3, len(frame))
+        share = float(magnitude.nlargest(count).sum()) / total * 100
+        concentration.append(f"持仓{direction}前 {count} 家占全部{direction}股数的 {share:.1f}%")
+    net = int(comparison.shares_change.sum())
+    net_text = f"增加 {net:,} 股" if net > 0 else f"减少 {-net:,} 股" if net < 0 else "无变化"
+    return ["；".join(leaders) + "。", "；".join(concentration) + "。",
+            f"共 {len(positive)} 家持仓增加、{len(negative)} 家减少、{unchanged} 家不变，样本持股合计净变化为{net_text}。"]
+
+
 def get_dataset_info():
     dates = [day.isoformat() for day in discover_snapshots()]
     return {"stock_code": "06731", "listing_date": "2026-09-29", "dates": dates,

@@ -33,14 +33,26 @@ def clear_chat():
 
 page = st.session_state.page
 apply_styles(assistant=page == "💬 AI 分析助手")
+if page == "💬 AI 分析助手":
+    st.button("返回主看板", key="back_dashboard", icon=":material/arrow_back:",
+              on_click=change_page, args=("📊 CCASS Dashboard",))
+else:
+    with st.container(key="top_navigation"):
+        columns = st.columns(4)
+        for column, label, target, key in (
+            (columns[0], "主看板", "📊 CCASS Dashboard", "nav_dashboard"),
+            (columns[1], "Participant 追踪", "Participant 追踪", "nav_participant"),
+            (columns[2], "区间对比", "区间对比", "nav_comparison"),
+            (columns[3], "查册校验", "查册校验", "nav_registry"),
+        ):
+            column.button(label, key=key, width="stretch", type="primary" if page == target else "secondary",
+                          on_click=change_page, args=(target,))
 with st.sidebar:
     st.html('<div class="cc-brand"><div class="cc-brand-icon">◈</div><div><strong>CCASS Research</strong><small>06731 · WORKSPACE</small></div></div>')
-    st.html('<div class="cc-section">工作空间</div>')
-    for label, key, icon in (("06731 持仓监控看板", "nav_dashboard", ":material/bar_chart:"),
-                             ("AI 分析助手", "nav_assistant", ":material/chat_bubble_outline:")):
-        target = "💬 AI 分析助手" if key == "nav_assistant" else "📊 CCASS Dashboard"
-        st.button(label, key=key, icon=icon, width="stretch", type="primary" if page == target else "secondary",
-                  on_click=change_page, args=(target,))
+    st.html('<div class="cc-section">分析工具</div>')
+    st.button("AI 分析助手", key="nav_assistant", icon=":material/chat_bubble_outline:", width="stretch",
+              type="primary" if page == "💬 AI 分析助手" else "secondary",
+              on_click=change_page, args=("💬 AI 分析助手",))
     st.divider()
     dates_available = list(discover_snapshots())
     latest = str(dates_available[-1]) if dates_available else "暂无数据"
@@ -123,6 +135,11 @@ if page == "💬 AI 分析助手":
     render_assistant(typed)
     st.stop()
 
-from dashboard import render_dashboard
+import dashboard
 
-render_dashboard()
+# 热更新 app.py 后，进程可能仍持有旧版无参数 dashboard 函数。
+if "view" not in inspect.signature(dashboard.render_dashboard).parameters:
+    importlib.invalidate_caches()
+    importlib.reload(dashboard)
+
+dashboard.render_dashboard(view="主看板" if page == "📊 CCASS Dashboard" else page)
