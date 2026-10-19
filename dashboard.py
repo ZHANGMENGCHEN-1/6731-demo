@@ -57,10 +57,6 @@ def show_leaders(comparison, title, period):
 
 
 def render_dashboard(view="主看板"):
-    titles = {"主看板": "06731 持仓监控看板", "Participant 追踪": "Participant 持仓追踪",
-              "区间对比": "CCASS 区间对比", "查册校验": "查册校验"}
-    st.title(titles.get(view, "06731 持仓监控看板"))
-    st.caption("CCASS HOLDINGS MONITOR · 本地快照 · 结算后持仓观察")
     try:
         data = get_monitoring_data()
     except (ValueError, OSError, OverflowError) as exc:
@@ -140,7 +136,8 @@ def render_dashboard(view="主看板"):
 
 
 def show_participant_tracking(frames):
-    st.subheader("单个 Participant · 上市以来持仓趋势")
+    st.subheader("单个机构 · 上市以来持仓趋势")
+    st.caption("机构指 CCASS 参与者，包括券商、银行及托管机构等，不代表最终实益拥有人。")
     participants = pd.concat(list(frames.values())).drop_duplicates("participant_id", keep="last").set_index("participant_id")
     ids = sorted(participants.index)
     pid = st.selectbox("选择 Participant", ids, format_func=lambda value: f"{value} · {participants.loc[value, 'participant_name']}", key="trend_participant")

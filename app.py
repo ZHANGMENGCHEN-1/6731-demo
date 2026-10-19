@@ -41,7 +41,7 @@ else:
         columns = st.columns(4)
         for column, label, target, key in (
             (columns[0], "主看板", "📊 CCASS Dashboard", "nav_dashboard"),
-            (columns[1], "Participant 追踪", "Participant 追踪", "nav_participant"),
+            (columns[1], "机构持仓追踪", "Participant 追踪", "nav_participant"),
             (columns[2], "区间对比", "区间对比", "nav_comparison"),
             (columns[3], "查册校验", "查册校验", "nav_registry"),
         ):
