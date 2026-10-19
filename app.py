@@ -13,7 +13,7 @@ if "on_text" not in inspect.signature(agent.run_agent).parameters:
 from agent import run_agent, is_llm_configured
 from ui import apply_styles, render_notice
 
-st.set_page_config(page_title="06731 · CCASS Research", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="06731持仓监控看板", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
 if "page" not in st.session_state:
     st.session_state.page = "📊 CCASS Dashboard"
 if "messages" not in st.session_state:
@@ -32,8 +32,8 @@ def clear_chat():
 
 
 page = st.session_state.page
-apply_styles(assistant=page == "💬 AI 分析助手")
-if page == "💬 AI 分析助手":
+apply_styles(assistant=page == "💬 AI 对话助手")
+if page == "💬 AI 对话助手":
     st.button("返回主看板", key="back_dashboard", icon=":material/arrow_back:",
               on_click=change_page, args=("📊 CCASS Dashboard",))
 else:
@@ -48,17 +48,17 @@ else:
             column.button(label, key=key, width="stretch", type="primary" if page == target else "secondary",
                           on_click=change_page, args=(target,))
 with st.sidebar:
-    st.html('<div class="cc-brand"><div class="cc-brand-icon">◈</div><div><strong>CCASS Research</strong><small>06731 · WORKSPACE</small></div></div>')
-    st.html('<div class="cc-section">分析工具</div>')
-    st.button("AI 分析助手", key="nav_assistant", icon=":material/chat_bubble_outline:", width="stretch",
-              type="primary" if page == "💬 AI 分析助手" else "secondary",
-              on_click=change_page, args=("💬 AI 分析助手",))
+    st.html('<div class="cc-brand"><div class="cc-brand-icon">◈</div><div><strong>CCASS</strong><small>06731 · WORKSPACE</small></div></div>')
+    st.html('<div class="cc-section">AI工具</div>')
+    st.button("AI 对话助手", key="nav_assistant", icon=":material/chat_bubble_outline:", width="stretch",
+              type="primary" if page == "💬 AI 对话助手" else "secondary",
+              on_click=change_page, args=("💬 AI 对话助手",))
     st.divider()
     dates_available = list(discover_snapshots())
     latest = str(dates_available[-1]) if dates_available else "暂无数据"
     data_status = "本地数据已就绪" if dates_available else "等待本地数据"
     st.html(f'<div class="cc-status"><strong>● {data_status}</strong><p>最新快照 · {latest}</p><p>{len(dates_available)} 个日期 · 06731</p></div>')
-    if page == "💬 AI 分析助手":
+    if page == "💬 AI 对话助手":
         st.button("清空对话", key="clear_chat", icon=":material/delete_outline:", width="stretch", on_click=clear_chat)
     with st.expander("开发设置"):
         debug = st.checkbox("显示 Agent Debug", value=False, key="agent_debug")
@@ -69,7 +69,7 @@ with st.sidebar:
 def render_assistant(typed=None):
     llm_status = "智谱 GLM 已配置" if is_llm_configured() else "LLM 尚未配置"
     st.html('''<div class="cc-hero">
-    <h1>06731 CCASS AI 分析助手</h1>
+    <h1>06731 CCASS AI 对话助手</h1>
     <p>通过自然语言查询 06731 上市后的 CCASS 持仓变化</p>
     <span class="cc-badge">框架已就绪 · STATUS</span></div>'''.replace("STATUS", llm_status))
     render_notice()
@@ -129,7 +129,7 @@ def render_assistant(typed=None):
         st.rerun()
 
 
-if page == "💬 AI 分析助手":
+if page == "💬 AI 对话助手":
     # 必须在主页面根级调用；嵌入 container 会变成普通流式布局，无法固定在屏幕底部。
     typed = st.chat_input("询问持仓变化、Participant 趋势…", key="assistant_input")
     render_assistant(typed)

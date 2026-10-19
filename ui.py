@@ -11,8 +11,9 @@ def apply_styles(assistant=False):
 :root { --cc-ink:#25282c; --cc-muted:#645f59; --cc-accent:#803b4b; }
 .stApp { background:#f5f2ed; color:var(--cc-ink); }
 [data-testid="stHeader"] { background:rgba(245,242,237,.97); }
-.stMainBlockContainer { max-width:WIDTH; padding-top:2.5rem; padding-bottom:3rem; }
+.stMainBlockContainer { max-width:WIDTH; padding-top:5rem; padding-bottom:3rem; }
 h1,h2,h3 { color:#25282c!important; }
+[data-testid="stHeadingWithActionElements"] h1 { font-size:28px; line-height:1.4; font-weight:600; }
 h2 { font-weight:600!important; font-size:21px!important; }
 h3 { font-weight:600!important; font-size:18px!important; }
 [data-testid="stCaptionContainer"] { color:#645f59; }
@@ -64,7 +65,8 @@ a { color:#803b4b; }
 [data-testid="stDataFrame"] { border-radius:8px; }
 [data-testid="stExpander"] { border-color:#c8beb2; border-radius:10px; }
 @media(max-width:640px) {
-  .stMainBlockContainer { padding-top:1rem; padding-left:1rem; padding-right:1rem; }
+  .stMainBlockContainer { padding-top:4.5rem; padding-left:1rem; padding-right:1rem; }
+  [data-testid="stHeadingWithActionElements"] h1 { font-size:24px; }
   .cc-hero { margin-top:12px; }
   [class*="st-key-suggestion_"] button { padding:12px; }
 }
