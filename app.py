@@ -31,6 +31,8 @@ def clear_chat():
     st.session_state.agent_runs = []
 
 
+if st.session_state.page == "查册校验":
+    st.session_state.page = "📊 CCASS Dashboard"
 page = st.session_state.page
 apply_styles(assistant=page == "💬 AI 对话助手")
 if page == "💬 AI 对话助手":
@@ -38,12 +40,11 @@ if page == "💬 AI 对话助手":
               on_click=change_page, args=("📊 CCASS Dashboard",))
 else:
     with st.container(key="top_navigation"):
-        columns = st.columns(4)
+        columns = st.columns(3)
         for column, label, target, key in (
             (columns[0], "主看板", "📊 CCASS Dashboard", "nav_dashboard"),
             (columns[1], "机构持仓追踪", "Participant 追踪", "nav_participant"),
             (columns[2], "区间对比", "区间对比", "nav_comparison"),
-            (columns[3], "查册校验", "查册校验", "nav_registry"),
         ):
             column.button(label, key=key, width="stretch", type="primary" if page == target else "secondary",
                           on_click=change_page, args=(target,))
