@@ -56,6 +56,8 @@ class MonitoringTests(unittest.TestCase):
              patch.object(analysis, "load_snapshot", side_effect=lambda day: frames[day]):
             result = analysis.get_monitoring_data()
         self.assertEqual(result["workdays"][-1], date(2026, 10, 5))
+        pd.testing.assert_frame_equal(result["latest_snapshot_comparison"], analysis.compare_snapshots(
+            frames[date(2026, 10, 5)], frames[date(2026, 10, 10)]))
         pd.testing.assert_frame_equal(result["latest_comparison"], analysis.compare_snapshots(
             frames[date(2026, 10, 2)], frames[date(2026, 10, 5)]))
         self.assertEqual(result["persistent_increases"].participant_id.tolist(), ["B00001"])

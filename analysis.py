@@ -214,6 +214,7 @@ def get_monitoring_data():
     weekdays = [day for day in dates if day.weekday() < 5]
     recent = weekdays[-6:]
     return {"frames": frames, "dates": dates, "workdays": weekdays,
+            "latest_snapshot_comparison": compare_snapshots(frames[dates[-2]], frames[dates[-1]]) if len(dates) >= 2 else None,
             "latest_comparison": compare_snapshots(frames[weekdays[-2]], frames[weekdays[-1]]) if len(weekdays) >= 2 else None,
             "listing_comparison": compare_snapshots(frames[dates[0]], frames[dates[-1]]) if len(dates) >= 2 else None,
             "persistent_increases": _persistent_from_frames(frames, "increase"),

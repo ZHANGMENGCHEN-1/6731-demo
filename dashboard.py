@@ -85,11 +85,11 @@ def render_dashboard(view="主看板"):
     d.metric("已获取日期数", len(dates))
     with st.container(border=True, key="home_summary"):
         st.markdown("### 最新持仓变化摘要")
-        if data["latest_comparison"] is None:
-            st.caption("至少需要两个已有工作日快照，才能生成变化摘要。")
+        if data["latest_snapshot_comparison"] is None:
+            st.caption("至少需要两个已有日期快照，才能生成变化摘要。")
         else:
-            st.caption(f"{workdays[-2]} → {workdays[-1]} · Python 自动汇总 · 无需 AI")
-            for paragraph in make_home_summary(data["latest_comparison"]):
+            st.caption(f"{dates[-2]} → {dates[-1]} · 最新快照与前一已有快照 · Python 自动汇总")
+            for paragraph in make_home_summary(data["latest_snapshot_comparison"]):
                 st.write(paragraph)
             st.caption("集中度按持股数量变化的绝对值计算，增加与减少分别统计；样本净变化不等于市场资金净流入或净流出，不能确认机构之间存在直接筹码转移。")
     render_notice()
