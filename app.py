@@ -12,8 +12,10 @@ if "on_text" not in inspect.signature(agent.run_agent).parameters:
     importlib.reload(agent)
 from agent import run_agent, is_llm_configured
 from ui import apply_styles, render_notice
+from auto_ccass import render_auto_update_status
+from navigation import PARTICIPANT_MENU
 
-st.set_page_config(page_title="06731持仓监控看板", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="06731 市场与持仓看板", page_icon="📊", layout="wide", initial_sidebar_state="collapsed")
 if "page" not in st.session_state:
     st.session_state.page = "📊 CCASS Dashboard"
 if "messages" not in st.session_state:
@@ -26,6 +28,11 @@ def change_page(page):
     st.session_state.page = page
 
 
+def open_participant_section(section):
+    st.session_state.page = "Participant 追踪"
+    st.session_state.participant_workspace_view = section
+
+
 def clear_chat():
     st.session_state.messages = []
     st.session_state.agent_runs = []
@@ -35,19 +42,22 @@ if st.session_state.page == "查册校验":
     st.session_state.page = "📊 CCASS Dashboard"
 page = st.session_state.page
 apply_styles(assistant=page == "💬 AI 对话助手")
-if page == "💬 AI 对话助手":
-    st.button("返回主看板", key="back_dashboard", icon=":material/arrow_back:",
-              on_click=change_page, args=("📊 CCASS Dashboard",))
-else:
-    with st.container(key="top_navigation"):
-        columns = st.columns(3)
-        for column, label, target, key in (
-            (columns[0], "主看板", "📊 CCASS Dashboard", "nav_dashboard"),
-            (columns[1], "机构持仓追踪", "Participant 追踪", "nav_participant"),
-            (columns[2], "区间对比", "区间对比", "nav_comparison"),
-        ):
-            column.button(label, key=key, width="stretch", type="primary" if page == target else "secondary",
-                          on_click=change_page, args=(target,))
+with st.container(key="top_navigation"):
+    columns = st.columns([1.4, 1, 1, 1, 1, 6], gap="small", vertical_alignment="center")
+    with columns[0]:
+        st.html('<div class="cc-nav-logo"><span>◈</span><strong>06731</strong></div>')
+    for column, label, target, key in (
+        (columns[1], "主看板", "📊 CCASS Dashboard", "nav_dashboard"),
+        (columns[3], "多参与者对比", "区间对比", "nav_comparison"),
+        (columns[4], "AI助手（待修改）", "💬 AI 对话助手", "nav_ai_top"),
+    ):
+        column.button(label, key=key, width="stretch", type="primary" if page == target else "secondary",
+                      on_click=change_page, args=(target,))
+    with columns[2]:
+        with st.popover("持仓与交易", key="nav_participant", width="stretch",
+                        type="primary" if page == "Participant 追踪" else "secondary"):
+            for label, route, key in PARTICIPANT_MENU:
+                st.button(label, key=key, width="stretch", on_click=open_participant_section, args=(route,))
 with st.sidebar:
     st.html('<div class="cc-brand"><div class="cc-brand-icon">◈</div><div><strong>CCASS</strong><small>06731 · WORKSPACE</small></div></div>')
     st.html('<div class="cc-section">AI工具</div>')
@@ -65,12 +75,12 @@ with st.sidebar:
         debug = st.checkbox("显示 Agent Debug", value=False, key="agent_debug")
         st.caption("智谱已配置 · Python 数据工具 + LLM 解读" if is_llm_configured() else "LLM 尚未配置 · 当前仅执行本地 Python 工具")
     st.caption("CCASS 持仓观察 · 内部研究 Demo")
+    render_auto_update_status()
 
 
 def render_assistant(typed=None):
     llm_status = "智谱 GLM 已配置" if is_llm_configured() else "LLM 尚未配置"
     st.html('''<div class="cc-hero">
-    <h1>06731 CCASS AI 对话助手</h1>
     <p>通过自然语言查询 06731 上市后的 CCASS 持仓变化</p>
     <span class="cc-badge">框架已就绪 · STATUS</span></div>'''.replace("STATUS", llm_status))
     render_notice()
@@ -84,7 +94,6 @@ def render_assistant(typed=None):
         for index, question in enumerate(questions):
             if st.button(question, key=f"suggestion_{index}", width="stretch"):
                 selected = question
-    question = selected or typed
     assistant_index = 0
     for message in st.session_state.messages:
         with st.chat_message(message["role"], avatar=None if message["role"] == "user" else ":material/auto_awesome:"):
@@ -114,6 +123,8 @@ def render_assistant(typed=None):
                         st.caption(f"已构造 {len(result['llm_messages'])} 条消息 · {status}")
                 assistant_index += 1
 
+    submitted = st.chat_input("询问持仓变化、Participant 趋势…", key="assistant_input")
+    question = selected or typed or submitted
     if question and question.strip():
         history = [dict(message) for message in st.session_state.messages]
         st.session_state.messages.append({"role": "user", "content": question.strip()})
@@ -131,9 +142,9 @@ def render_assistant(typed=None):
 
 
 if page == "💬 AI 对话助手":
-    # 必须在主页面根级调用；嵌入 container 会变成普通流式布局，无法固定在屏幕底部。
-    typed = st.chat_input("询问持仓变化、Participant 趋势…", key="assistant_input")
-    render_assistant(typed)
+    with st.container(key="assistant_section"):
+        with st.container(key="assistant_content"):
+            render_assistant()
     st.stop()
 
 import dashboard

@@ -43,7 +43,7 @@ CSV 完整写入临时文件后原子发布，不覆盖已有文件；网站或�
 
 超时、HTTP 错误、流中错误和不完整回答会显示安全错误提示；不打印 Key、请求头或原始错误响应，不自动重试。工具执行失败时不调用模型。全部持仓计算仍由 Python 完成。
 
-`python -m unittest test_llm -v` 运行离线 HTTP 模拟测试，不发送真实请求、不使用真实额度。未验证账户 Key、模型权限及线上返回。`config.py` 和 `.streamlit/secrets.toml` 已加入忽略列表；已被 Git 跟踪的文件不会因新增忽略规则而自动取消跟踪。
+`python -m unittest discover -s tests -p test_llm.py -v` 运行本地离线 HTTP 模拟测试，不发送真实请求、不使用真实额度。测试文件统一放在 `tests/`，仅本地保留，不纳入 Git。未验证账户 Key、模型权限及线上返回。`config.py` 和 `.streamlit/secrets.toml` 已加入忽略列表；已被 Git 跟踪的文件不会因新增忽略规则而自动取消跟踪。
 
 ## 已回填结果
 

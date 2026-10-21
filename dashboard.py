@@ -1,8 +1,11 @@
 """持仓监控首页与原有自定义日期比较；仅使用本地 Python 计算。"""
 import pandas as pd
+import altair as alt
 import streamlit as st
+from participant_names import chinese_name, display_name
 from analysis import get_monitoring_data, compare_snapshots, top_changes, make_summary, make_home_summary, PERSISTENT_DEFINITION
 from ui import render_notice
+from navigation import PARTICIPANT_MENU, LEGACY_PARTICIPANT_ROUTES
 
 LABELS = {"participant_id": "Participant ID", "participant_name": "Participant Name", "address": "地址",
           "start_shares": "起始持仓", "end_shares": "结束持仓", "shares_change": "持仓变化",
@@ -13,6 +16,11 @@ LABELS = {"participant_id": "Participant ID", "participant_name": "Participant N
 
 
 def show_table(frame, include_address=False):
+    if {"participant_id", "participant_name"}.issubset(frame.columns):
+        frame = frame.copy()
+        names = [chinese_name(row.participant_id, row.participant_name) or "未提供中文名称"
+                 for row in frame.itertuples()]
+        frame.insert(list(frame.columns).index("participant_name"), "中文名称", names)
     if not include_address:
         frame = frame.drop(columns="address", errors="ignore")
     st.dataframe(frame.rename(columns=LABELS).style.format({
@@ -33,7 +41,7 @@ def show_rankings(comparison, n, prefix):
             if frame.empty:
                 st.caption("没有符合条件的 Participant。")
                 continue
-            chart = frame.assign(label=frame.participant_id + " · " + frame.participant_name)
+            chart = frame.assign(label=[f"{r.participant_id} · {chinese_name(r.participant_id, r.participant_name) or r.participant_name}" for r in frame.itertuples()])
             chart_tab, detail_tab = st.tabs(["图表", "数据明细"])
             with chart_tab:
                 st.bar_chart(chart, x="label", y="shares_change", color=color, x_label="Participant", y_label="持仓变化（股）")
@@ -53,10 +61,58 @@ def show_leaders(comparison, title, period):
             else:
                 row = frame.iloc[0]
                 st.metric(f"最大持仓{direction}", f"{abs(int(row.shares_change)):,} 股")
-                st.write(f"**{row.participant_id}** · {row.participant_name}")
+                st.write(f"**{row.participant_id}** · {display_name(row.participant_id, row.participant_name)}")
 
 
 def render_dashboard(view="主看板"):
+    if view == "主看板":
+        from market_home import render_market_home
+        render_market_home()
+        return
+    if view == "Participant 追踪":
+        render_participant_page()
+        return
+    if view == "区间对比":
+        from participant_comparison import render_participant_comparison
+        render_participant_comparison()
+        return
+    _render_ccass_dashboard(view)
+
+
+def render_participant_page():
+    """两种独立数据路径用页内切换组织，避免上下重复堆叠。"""
+    with st.container(key="participant_workspace"):
+        choices = [route for _, route, _ in PARTICIPANT_MENU]
+        value = st.session_state.get("participant_workspace_view")
+        selected = LEGACY_PARTICIPANT_ROUTES.get(value, value) or choices[0]
+        if selected not in choices:
+            selected = choices[0]
+        st.session_state.participant_workspace_view = selected
+        if selected == "recent_trades":
+            from trade_ticker import render_trade_ticker
+            render_trade_ticker()
+        elif selected == "broker_history":
+            from broker_history import render_broker_history
+            render_broker_history()
+        else:
+            from ccass_overview import render_ccass_overview
+            render_ccass_overview()
+            st.divider()
+            st.subheader("参与者持仓")
+            try:
+                data = get_monitoring_data()
+            except (ValueError, OSError, OverflowError) as exc:
+                st.error(f"持仓数据读取失败：{exc}")
+                return
+            dates = data["dates"]
+            st.caption(f"CCASS 持仓快照 · 最新日期 {dates[-1] if dates else '暂无'} · 已获取 {len(dates)} 个日期 [CCASS 参与者，包括券商、银行及托管机构等，不代表最终实益拥有人。]")
+            if not dates:
+                st.info("暂无真实 CSV，请先运行 fetch_ccass.py。")
+            else:
+                show_participant_tracking(data["frames"])
+
+
+def _render_ccass_dashboard(view="主看板"):
     try:
         data = get_monitoring_data()
     except (ValueError, OSError, OverflowError) as exc:
@@ -94,7 +150,7 @@ def render_dashboard(view="主看板"):
             st.caption("集中度按持股数量变化的绝对值计算，增加与减少分别统计；样本净变化不等于市场资金净流入或净流出，不能确认机构之间存在直接筹码转移。")
     render_notice()
     with st.expander("数据来源与统计口径", expanded=False):
-        st.caption("最新交易日栏目使用最近两个已有周一至周五快照，不额外接入交易所日历；周末快照不作为交易日。上市以来从最早已有快照至最新快照计算。")
+        st.caption("最新变化摘要和 Top 5 均比较最新快照与前一个已有快照，包含实际存在的周末快照；若前一日无数据，则取前一个已有日期。上市以来从最早已有快照至最新快照计算。持续趋势仍使用已有工作日窗口。")
         st.markdown("[HKEX 原始查询页面](https://www3.hkexnews.hk/sdw/search/searchsdw.aspx) · 本页面不自动抓取或刷新数据")
     if not dates:
         st.info("暂无真实 CSV，请先运行 fetch_ccass.py。")
@@ -105,10 +161,10 @@ def render_dashboard(view="主看板"):
     st.caption("概览最新变化、上市以来表现和近期持续趋势；机构详情与自定义对比请使用顶部入口。")
     latest_tab, listing_tab, persistent_tab = st.tabs(["最新变化", "上市以来", "持续趋势"])
     with latest_tab:
-        st.subheader("最新交易日 · Top 5")
-        if data["latest_comparison"] is not None:
-            show_leaders(data["latest_comparison"], "最新交易日", f"{workdays[-2]} → {workdays[-1]}")
-            show_rankings(data["latest_comparison"], 5, "最新交易日")
+        st.subheader("最新快照 · Top 5")
+        if data["latest_snapshot_comparison"] is not None:
+            show_leaders(data["latest_snapshot_comparison"], "最新快照", f"{dates[-2]} → {dates[-1]}")
+            show_rankings(data["latest_snapshot_comparison"], 5, "最新快照")
         else:
             st.caption("数据不足，暂不展示排名。")
     with listing_tab:
@@ -136,21 +192,29 @@ def render_dashboard(view="主看板"):
 
 
 def show_participant_tracking(frames):
-    st.subheader("单个机构 · 上市以来持仓趋势")
-    st.caption("机构指 CCASS 参与者，包括券商、银行及托管机构等，不代表最终实益拥有人。")
     participants = pd.concat(list(frames.values())).drop_duplicates("participant_id", keep="last").set_index("participant_id")
     ids = sorted(participants.index)
-    pid = st.selectbox("选择 Participant", ids, format_func=lambda value: f"{value} · {participants.loc[value, 'participant_name']}", key="trend_participant")
+    pid = st.selectbox("选择 CCASS 参与者", ids, format_func=lambda value: f"{value} · {display_name(value, participants.loc[value, 'participant_name'])}", key="trend_participant")
     history = []
     for day, frame in frames.items():
         match = frame[frame.participant_id == pid]
         history.append({"日期": pd.Timestamp(day), "持股数量（股）": int(match.shares.iloc[0]) if not match.empty else 0,
                         "占比（%）": float(match.percentage.iloc[0]) if not match.empty else 0.0, "该日存在记录": not match.empty})
     history = pd.DataFrame(history)
-    st.line_chart(history, x="日期", y="持股数量（股）", color="#486888")
+    chart = alt.Chart(history).mark_line(color="#486888").encode(
+        x=alt.X("日期:T", title="日期"),
+        y=alt.Y("持股数量（股）:Q", title="持股数量（股）"),
+        tooltip=[alt.Tooltip("日期:T", format="%Y-%m-%d"),
+                 alt.Tooltip("持股数量（股）:Q", format=","),
+                 alt.Tooltip("占比（%）:Q", format=".2f")],
+    ).properties(height=300, background="#ffffff").interactive().configure_view(
+        fill="#ffffff", stroke="#d3dae2"
+    ).configure_axis(labelColor="#25282c", titleColor="#25282c", gridColor="#e8edf2")
+    st.altair_chart(chart, width="stretch", theme=None)
     st.caption("缺席日期按零处理；该曲线反映结算后持仓，不是实时成交。")
     with st.expander("查看逐日持仓明细"):
-        st.dataframe(history, hide_index=True, width="stretch")
+        st.dataframe(history.style.set_properties(**{"background-color": "#ffffff", "color": "#171717"}),
+                     hide_index=True, width="stretch")
 
 
 def show_custom_comparison(dates, frames):

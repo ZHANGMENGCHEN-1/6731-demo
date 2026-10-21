@@ -5,24 +5,40 @@ NOTICE = "CCASS Participant 持仓反映的是券商、托管机构等参与者�
 
 
 def apply_styles(assistant=False):
-    width = "860px" if assistant else "1280px"
+    width = "1600px" if assistant else "1280px"
     st.html("""
 <style>
-:root { --cc-ink:#25282c; --cc-muted:#645f59; --cc-accent:#803b4b; }
+:root { --cc-ink:#25282c; --cc-muted:#645f59; --cc-accent:#803b4b; --cc-title-size:16px; --cc-text-size:13px; }
 .stApp { background:#f5f2ed; color:var(--cc-ink); }
-[data-testid="stHeader"] { background:rgba(245,242,237,.97); }
-.stMainBlockContainer { max-width:WIDTH; padding-top:5rem; padding-bottom:3rem; }
+[data-testid="stHeader"] { visibility:hidden; height:0; background:transparent; }
+[data-testid="stToolbar"], [data-testid="stAppDeployButton"] { display:none!important; }
+[data-testid="stSidebarCollapsedControl"] { visibility:visible; position:fixed; top:8px; left:8px; z-index:1000001; }
+.stMainBlockContainer { max-width:WIDTH; padding-top:1.5rem; padding-bottom:3rem; }
 h1,h2,h3 { color:#25282c!important; }
 [data-testid="stHeadingWithActionElements"] h1 { font-size:28px; line-height:1.4; font-weight:600; }
-h2 { font-weight:600!important; font-size:21px!important; }
-h3 { font-weight:600!important; font-size:18px!important; }
+h2,h3,h4 { font-weight:600!important; font-size:var(--cc-title-size)!important; line-height:1.5!important; }
 [data-testid="stCaptionContainer"] { color:#645f59; }
 a { color:#803b4b; }
-.st-key-top_navigation { padding:8px 0 18px; border-bottom:1px solid #d4ccc2; margin-bottom:12px; }
-.st-key-top_navigation button { border-radius:8px; min-height:44px; font-weight:600; }
-.st-key-top_navigation button[kind="primary"] { background:#803b4b; color:#fff; border:1px solid #803b4b; }
-.st-key-top_navigation button[kind="secondary"] { background:#fff; color:#46413c; border:1px solid #d4ccc2; }
-.st-key-top_navigation button[kind="secondary"]:hover { background:#f0e5e7; border-color:#a47782; }
+.st-key-top_navigation { position:fixed; top:0; left:0; right:0; width:100%; height:54px; box-sizing:border-box; z-index:999990; padding:4px 24px 0 60px; background:#fff; border-bottom:1px solid #e6e0d8; margin:0; }
+.stMainBlockContainer:has(.st-key-top_navigation) {padding-top:64px;}
+.cc-nav-logo {display:flex;align-items:center;gap:8px;height:42px;white-space:nowrap;}
+.cc-nav-logo span {color:#803b4b;font-size:27px;line-height:1;}
+.cc-nav-logo strong {font-size:19px;letter-spacing:1px;color:#25282c;}
+[data-testid="stSidebar"] {z-index:1000000;}
+.st-key-top_navigation button { border-radius:0; height:46px; min-height:46px; font-weight:700; padding:10px 4px; justify-content:center; box-shadow:none!important; white-space:nowrap; }
+.st-key-top_navigation button p {font-weight:700!important;}
+.st-key-top_navigation button[kind="primary"] { background:transparent; color:#803b4b; border:0; border-bottom:3px solid #803b4b; }
+.st-key-top_navigation button[kind="secondary"] { background:transparent; color:#46413c; border:0; border-bottom:3px solid transparent; }
+.st-key-top_navigation button[kind="secondary"]:hover { background:transparent; color:#803b4b; border-bottom-color:#d8bcc3; }
+[data-testid="stPopoverBody"]:has(.st-key-nav_ccass_changes) {width:220px!important;min-width:0!important;max-width:calc(100vw - 24px)!important;padding:5px!important;border-radius:0!important;background:#fff!important;}
+[data-testid="stPopoverBody"]:has(.st-key-nav_ccass_changes) [data-testid="stVerticalBlock"] {gap:0!important;}
+.st-key-nav_ccass_changes button,.st-key-nav_broker_history button {background:#fff!important;color:#25282c!important;border:0!important;border-radius:0!important;box-shadow:none!important;min-height:34px!important;height:auto!important;padding:7px 12px!important;justify-content:flex-start!important;}
+.st-key-nav_ccass_changes button p,.st-key-nav_broker_history button p {font-size:13px!important;font-weight:400!important;line-height:1.5!important;}
+.st-key-nav_ccass_changes button:hover,.st-key-nav_broker_history button:hover,
+.st-key-nav_ccass_changes button:focus-visible,.st-key-nav_broker_history button:focus-visible {background:#ebe5dc!important;}
+.st-key-nav_trade_ticker button {background:#fff!important;color:#25282c!important;border:0!important;border-radius:0!important;box-shadow:none!important;min-height:34px!important;height:auto!important;padding:7px 12px!important;justify-content:flex-start!important;}
+.st-key-nav_trade_ticker button p {font-size:13px!important;font-weight:400!important;line-height:1.5!important;}
+.st-key-nav_trade_ticker button:hover,.st-key-nav_trade_ticker button:focus-visible {background:#ebe5dc!important;}
 [data-testid="stSidebar"] { background:#ebe5dc; border-right:1px solid #d4ccc2; }
 [data-testid="stSidebar"] > div:first-child { padding-top:1.7rem; }
 [data-testid="stSidebar"] hr { border-color:#d4ccc2; margin:1.3rem 0; }
@@ -55,6 +71,62 @@ a { color:#803b4b; }
 [data-testid="stChatInput"] { border:1px solid #b9aa9b; border-radius:18px; background:#fff; }
 [data-testid="stBottom"] { background:#f5f2ed; }
 [data-testid="stBottomBlockContainer"] { max-width:860px; padding-bottom:1.2rem; }
+.st-key-assistant_section {background:#fff;border:1px solid #e6e0d8;border-radius:12px;padding:18px 20px;box-shadow:0 2px 10px rgba(37,40,44,.025);}
+.st-key-assistant_section .cc-hero {margin-top:4px;}
+.st-key-assistant_content {max-width:796px;width:100%;margin-left:auto;margin-right:auto;}
+.stMainBlockContainer:has(.st-key-participant_workspace) {max-width:1600px;}
+.st-key-participant_workspace {background:#fff;border:1px solid #e6e0d8;border-radius:12px;padding:18px 20px;box-shadow:0 2px 10px rgba(37,40,44,.025);}
+.stMainBlockContainer:has(.st-key-multi_participant_workspace) {max-width:1600px;}
+.st-key-multi_participant_workspace {background:#fff;border:1px solid #e6e0d8;border-radius:12px;padding:18px 20px;box-shadow:0 2px 10px rgba(37,40,44,.025);box-sizing:border-box;min-width:0;}
+.st-key-multi_participant_workspace [data-testid="stVegaLiteChart"] {background:#fff;max-width:100%;box-sizing:border-box;}
+.st-key-multi_participant_workspace [data-testid="stDataFrame"] {background:#fff;border:1px solid #d3dae2;border-radius:8px;overflow:hidden;}
+.st-key-multi_participant_workspace div:has(> input),.st-key-multi_participant_workspace input {background:#fff!important;}
+.st-key-multi_participant_workspace [data-testid="stSelectbox"]:hover div:has(> input) {background:#e8edf2!important;}
+.st-key-ccass_change_overview {background:#fff;border:1px solid #e6e0d8;border-radius:12px;padding:18px 20px;margin-top:12px;}
+.st-key-ccass_change_overview [data-testid="stDataFrame"] {border:1px solid #d3dae2;border-radius:8px;overflow:hidden;}
+.st-key-participant_workspace .st-key-ccass_change_overview {border:0;box-shadow:none;padding:0;margin-top:4px;}
+.st-key-participant_workspace .st-key-broker_history {border:0;box-shadow:none;padding:0;margin-top:4px;}
+.st-key-participant_workspace [data-testid="stForm"] {background:#fff;}
+.st-key-broker_history [data-testid="stDateInput"] input,
+.st-key-broker_history [data-testid="stDateInput"] div:has(> input) {background:#fff!important;border-color:#cbd3dc!important;}
+.st-key-broker_history [data-testid="stDateInput"]:hover input,
+.st-key-broker_history [data-testid="stDateInput"]:hover [data-baseweb="input"],
+.st-key-broker_history [data-testid="stDateInput"]:hover div:has(> input) {background:#e8edf2!important;border-color:#aebdcb!important;}
+.st-key-broker_history [data-testid="stDateInputField"] {background:#fff!important;border-color:#cbd3dc!important;transition:background-color .15s;}
+.st-key-broker_history [data-testid="stDateInputField"]:hover,
+.st-key-broker_history [data-testid="stDateInputField"]:focus-within {background:#e8edf2!important;border-color:#aebdcb!important;}
+.st-key-broker_history [data-testid="stDateInputField"] [role="group"],
+.st-key-broker_history [data-testid="stDateInputField"] [role="spinbutton"] {background:transparent!important;color:#171717!important;}
+.st-key-participant_workspace [data-baseweb="select"] > div,
+.st-key-participant_workspace [data-baseweb="input"] {background:#fff!important;border-color:#cbd3dc!important;}
+.st-key-participant_workspace input {background:#fff!important;color:#171717!important;}
+.st-key-trend_participant [data-baseweb="select"],
+.st-key-trend_participant [data-baseweb="select"] div,
+.st-key-trend_participant [role="combobox"],
+.st-key-trend_participant input {background-color:#fff!important;color:#171717!important;}
+.st-key-trend_participant div:has(> input),
+.st-key-participant_workspace [data-testid="stSelectbox"] div:has(> input) {background-color:#fff!important;border-color:#cbd3dc!important;}
+.st-key-participant_workspace .st-key-trend_participant input,
+.st-key-participant_workspace .st-key-trend_participant [role="combobox"],
+.st-key-participant_workspace .st-key-trend_participant div:has(> input),
+.st-key-participant_workspace .st-key-trend_participant [data-baseweb="select"] > div {background:#fff!important;border-color:#cbd3dc!important;color:#171717!important;}
+.st-key-participant_workspace .st-key-trend_participant:hover input,
+.st-key-participant_workspace .st-key-trend_participant:hover [role="combobox"],
+.st-key-participant_workspace .st-key-trend_participant:hover div:has(> input),
+.st-key-participant_workspace .st-key-trend_participant:hover [data-baseweb="select"] > div {background:#e8edf2!important;border-color:#aebdcb!important;}
+.st-key-participant_workspace [data-testid="stExpander"] summary {background:#fff!important;transition:background-color .15s;}
+.st-key-participant_workspace [data-testid="stExpander"] summary:hover {background:#e8edf2!important;}
+body:has(.st-key-participant_workspace) [data-testid="stSelectboxVirtualDropdown"],
+body:has(.st-key-participant_workspace) [data-testid="stSelectboxVirtualDropdown"] [role="option"] {background:#fff!important;color:#171717;}
+body:has(.st-key-participant_workspace) [data-testid="stSelectboxVirtualDropdown"] [role="option"][data-focused],
+body:has(.st-key-participant_workspace) [data-testid="stSelectboxVirtualDropdown"] [role="option"][data-hovered] {background:#e8edf2!important;}
+.st-key-participant_workspace {box-sizing:border-box;min-width:0;}
+.st-key-participant_workspace [data-testid="stVegaLiteChart"] {background:#fff;border:0;border-radius:8px;padding:0;box-sizing:border-box;width:100%;max-width:100%;min-width:0;box-shadow:inset 0 0 0 1px #d3dae2;}
+body:has(.st-key-participant_workspace) [data-baseweb="popover"] [role="listbox"],
+body:has(.st-key-participant_workspace) [data-baseweb="popover"] [role="option"] {background:#fff;color:#171717;}
+body:has(.st-key-participant_workspace) [data-baseweb="popover"] [role="option"]:hover,
+body:has(.st-key-participant_workspace) [data-baseweb="popover"] [role="option"][aria-selected="true"] {background:#e8edf2;}
+.st-key-participant_workspace [data-testid="stDataFrame"] {background:#fff;border:1px solid #cbd3dc;border-radius:8px;box-shadow:0 2px 5px rgba(25,35,45,.05);overflow:hidden;}
 [data-testid="stMetric"] { padding:18px 20px; background:#fff; border:1px solid #d4ccc2; border-top:3px solid #a68a62; border-radius:10px; }
 [data-testid="stMetricLabel"] { color:#645f59; font-weight:500; }
 [data-testid="stMetricValue"] { color:#25282c; font-size:30px; font-weight:700; }
@@ -64,8 +136,15 @@ a { color:#803b4b; }
 [data-testid="stForm"] { background:#fff; border-color:#d4ccc2; }
 [data-testid="stDataFrame"] { border-radius:8px; }
 [data-testid="stExpander"] { border-color:#c8beb2; border-radius:10px; }
+.stMainBlockContainer [data-testid="stCaptionContainer"],
+.stMainBlockContainer [data-testid="stCaptionContainer"] p,
+.stMainBlockContainer [data-testid="stMarkdownContainer"] > p,
+.stMainBlockContainer [data-testid="stWidgetLabel"] p,
+.cc-helper,.cc-notice,.cc-hero p,.cc-badge {font-size:var(--cc-text-size)!important;line-height:1.65;}
+.stMainBlockContainer [data-testid="stMarkdownContainer"] > p:has(> strong:only-child) > strong {font-size:var(--cc-title-size);font-weight:600;}
+.st-key-top_navigation button p {font-size:var(--cc-title-size)!important;}
 @media(max-width:640px) {
-  .stMainBlockContainer { padding-top:4.5rem; padding-left:1rem; padding-right:1rem; }
+  .stMainBlockContainer { padding-top:1.5rem; padding-left:1rem; padding-right:1rem; }
   [data-testid="stHeadingWithActionElements"] h1 { font-size:24px; }
   .cc-hero { margin-top:12px; }
   [class*="st-key-suggestion_"] button { padding:12px; }

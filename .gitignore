@@ -5,3 +5,5 @@ config.py
 .streamlit/secrets.toml
 .env
 logs/
+tests/
+/test*.py
