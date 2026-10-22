@@ -1,6 +1,5 @@
 """06731 主看板：行情与当日券商净买卖；不生成分析结论。"""
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor
 from html import escape
 import math
 import socket
@@ -24,19 +23,15 @@ def load_market_home():
     from cloud_store import uses_cloud, get_store
     if uses_cloud():
         result["backend"] = "supabase"
-        store = get_store()
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            pending = {dataset: pool.submit(store.read, dataset)
-                       for dataset in ("snapshot", "brokers", "intraday")}
-            for dataset, future in pending.items():
-                try:
-                    frame, record = future.result()
-                    result[dataset] = frame
-                    result.setdefault("sync_times", {})[dataset] = record["fetched_at"]
-                    if dataset == "snapshot":
-                        result["fetched_at"] = record["fetched_at"]
-                except ValueError as exc:
-                    result["errors"][dataset] = str(exc)
+        for dataset in ("snapshot", "brokers", "intraday"):
+            try:
+                frame, record = get_store().read(dataset)
+                result[dataset] = frame
+                result.setdefault("sync_times", {})[dataset] = record["fetched_at"]
+                if dataset == "snapshot":
+                    result["fetched_at"] = record["fetched_at"]
+            except ValueError as exc:
+                result["errors"][dataset] = str(exc)
         if not any(key in result for key in ("snapshot", "brokers", "intraday")):
             result["errors"]["connection"] = "云端尚无可读取的行情，请检查同步程序和 Supabase 配置。"
         return result
@@ -149,7 +144,6 @@ def render_market_content(status=None):
         '</div>'
     )
     if is_cloud:
-        st.caption("数据来源：Supabase · 刷新仅重读云端，最新数据由本机采集程序上传。")
         if (datetime.now(HK) - fetched).total_seconds() > 180:
             st.warning("最近同步已超过3分钟，当前展示上次成功采集的数据，请检查本机采集程序是否仍在运行。")
     if snapshot is not None and not snapshot.empty:

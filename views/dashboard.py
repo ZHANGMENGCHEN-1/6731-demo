@@ -4,8 +4,8 @@ import altair as alt
 import streamlit as st
 from participant_names import chinese_name, display_name
 from analysis import get_monitoring_data, compare_snapshots, top_changes, make_summary, make_home_summary, PERSISTENT_DEFINITION
-from ui import render_notice
-from navigation import PARTICIPANT_MENU, LEGACY_PARTICIPANT_ROUTES
+from views.ui import render_notice
+from views.navigation import PARTICIPANT_MENU, LEGACY_PARTICIPANT_ROUTES
 
 LABELS = {"participant_id": "Participant ID", "participant_name": "Participant Name", "address": "地址",
           "start_shares": "起始持仓", "end_shares": "结束持仓", "shares_change": "持仓变化",
@@ -66,14 +66,14 @@ def show_leaders(comparison, title, period):
 
 def render_dashboard(view="主看板"):
     if view == "主看板":
-        from market_home import render_market_home
+        from views.market_home import render_market_home
         render_market_home()
         return
     if view == "Participant 追踪":
         render_participant_page()
         return
     if view == "区间对比":
-        from participant_comparison import render_participant_comparison
+        from views.participant_comparison import render_participant_comparison
         render_participant_comparison()
         return
     _render_ccass_dashboard(view)
@@ -89,13 +89,13 @@ def render_participant_page():
             selected = choices[0]
         st.session_state.participant_workspace_view = selected
         if selected == "recent_trades":
-            from trade_ticker import render_trade_ticker
+            from views.trade_ticker import render_trade_ticker
             render_trade_ticker()
         elif selected == "broker_history":
-            from broker_history import render_broker_history
+            from views.broker_history import render_broker_history
             render_broker_history()
         else:
-            from ccass_overview import render_ccass_overview
+            from views.ccass_overview import render_ccass_overview
             render_ccass_overview()
             st.divider()
             st.subheader("参与者持仓")
