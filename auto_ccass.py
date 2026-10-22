@@ -46,13 +46,23 @@ def _updater():
 
 
 def start_auto_update():
+    from cloud_store import uses_cloud, get_store
+    if uses_cloud():
+        try:
+            dates = get_store().dates("ccass")
+            return {"running": False, "finished_at": None, "error": None, "cloud": True,
+                    "latest": str(dates[-1]) if dates else "暂无"}
+        except ValueError:
+            return {"running": False, "finished_at": None, "error": "云端 CCASS 暂不可用，请检查同步程序和数据库配置。", "cloud": True}
     return _updater().start_and_status()
 
 
 @st.fragment(run_every=5)
 def render_auto_update_status():
     state = start_auto_update()
-    if state["running"]:
+    if state.get("cloud"):
+        st.caption(state["error"] or f"CCASS 来自 Supabase · 最新持仓日 {state['latest']} · 本机采集端负责更新")
+    elif state["running"]:
         st.caption("CCASS 正在后台检查并补充新快照…")
     elif state["error"]:
         st.caption(state["error"])

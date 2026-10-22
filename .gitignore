@@ -4,6 +4,10 @@ __pycache__/
 config.py
 .streamlit/secrets.toml
 .env
+.ENV
+.env.*
+!.env.example
+.streamlit/*secrets*.toml
 logs/
 tests/
 /test*.py

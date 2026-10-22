@@ -20,6 +20,21 @@ SELL = "#913e55"
 def load_market_home():
     """只缓存数据，不缓存连接；各接口失败分别展示。"""
     result = {"fetched_at": datetime.now(HK).isoformat(), "errors": {}}
+    from cloud_store import uses_cloud, get_store
+    if uses_cloud():
+        result["backend"] = "supabase"
+        for dataset in ("snapshot", "brokers", "intraday"):
+            try:
+                frame, record = get_store().read(dataset)
+                result[dataset] = frame
+                result.setdefault("sync_times", {})[dataset] = record["fetched_at"]
+                if dataset == "snapshot":
+                    result["fetched_at"] = record["fetched_at"]
+            except ValueError as exc:
+                result["errors"][dataset] = str(exc)
+        if not any(key in result for key in ("snapshot", "brokers", "intraday")):
+            result["errors"]["connection"] = "云端尚无可读取的行情，请检查同步程序和 Supabase 配置。"
+        return result
     client = FutuClient()
     try:
         with socket.create_connection((client.host, client.port), timeout=1):
@@ -113,19 +128,25 @@ def render_market_content(status=None):
     if "connection" in errors:
         if status is not None:
             status.caption("行情服务暂不可用 · 香港时间")
-        st.warning("行情服务暂不可用，请确认 OpenD 已启动并登录，再点击刷新。")
+        st.warning("云端行情暂不可用，请检查本机同步程序与 Supabase 配置。" if data.get("backend") == "supabase"
+                   else "行情服务暂不可用，请确认 OpenD 已启动并登录，再点击刷新。")
         with st.expander("查看连接详情"):
             st.code(errors["connection"], language=None)
         return
-    fetched = datetime.fromisoformat(data["fetched_at"])
+    fetched = datetime.fromisoformat(data["fetched_at"]).astimezone(HK)
+    is_cloud = data.get("backend") == "supabase"
     snapshot = data.get("snapshot")
     target = status if status is not None else st
     target.html(
         '<div class="mh-update-strip">'
-        f'<div><span>本次取数</span><time>{fetched:%Y-%m-%d %H:%M:%S}</time></div>'
+        f'<div><span>{"最近同步" if is_cloud else "本次取数"}</span><time>{fetched:%Y-%m-%d %H:%M:%S}</time></div>'
         f'<div><span>行情更新</span><time>{escape(source_time(snapshot, "update_time"))}</time></div>'
         '</div>'
     )
+    if is_cloud:
+        st.caption("数据来源：Supabase · 刷新仅重读云端，最新数据由本机采集程序上传。")
+        if (datetime.now(HK) - fetched).total_seconds() > 180:
+            st.warning("最近同步已超过3分钟，当前展示上次成功采集的数据，请检查本机采集程序是否仍在运行。")
     if snapshot is not None and not snapshot.empty:
         row = snapshot.iloc[0]
         last, previous = row.get("last_price"), row.get("prev_close_price")

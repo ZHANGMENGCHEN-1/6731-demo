@@ -8,7 +8,12 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 COLUMNS = ["participant_id", "participant_name", "address", "shares", "percentage"]
 
 
-def discover_snapshots(data_dir=DATA_DIR):
+def discover_snapshots(data_dir=None):
+    if data_dir is None:
+        from cloud_store import uses_cloud, get_store, CloudSnapshot
+        if uses_cloud():
+            return {day: CloudSnapshot(day) for day in get_store().dates("ccass")}
+        data_dir = DATA_DIR
     snapshots = {}
     for path in Path(data_dir).glob("ccass_*.csv"):
         match = re.fullmatch(r"ccass_(\d{4}-\d{2}-\d{2})\.csv", path.name)
@@ -21,7 +26,11 @@ def discover_snapshots(data_dir=DATA_DIR):
 
 
 def load_snapshot(path):
-    df = pd.read_csv(path, dtype={"participant_id": str, "participant_name": str, "address": str}, keep_default_na=False)
+    from cloud_store import CloudSnapshot, get_store
+    if isinstance(path, CloudSnapshot):
+        df, _ = get_store().read("ccass", path.day)
+    else:
+        df = pd.read_csv(path, dtype={"participant_id": str, "participant_name": str, "address": str}, keep_default_na=False)
     missing = set(COLUMNS) - set(df.columns)
     if missing:
         raise ValueError(f"CSV 缺少字段：{', '.join(sorted(missing))}")

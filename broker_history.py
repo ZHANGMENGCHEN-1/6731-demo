@@ -22,7 +22,7 @@ def response_date(frame):
 
 
 def query_brokers_on_date(client, target):
-    """先确定接口实际基准日，再按交易日历换算；拒绝错日结果。"""
+    """以实时基准日和交易日历换算；历史更新时间不作为所属日期。"""
     ret, latest = brokers.get_top_ten_buy_sell_brokers(client, CODE, days_before=0)
     if ret != 0:
         raise ValueError(f"获取券商基准日期失败：{latest}")
@@ -45,11 +45,27 @@ def query_brokers_on_date(client, target):
             raise ValueError(f"历史券商查询失败：{frame}")
     else:
         frame = latest
-    actual = response_date(frame)
-    if actual != target:
-        raise ValueError(f"日期校验未通过：请求 {target}，接口实际返回 {actual}。未展示错日数据。")
+    response_date(frame)  # 检查更新时间有效，但不将它解释成历史交易日。
     return {"date": target, "anchor": anchor, "days_before": offset,
             "frame": frame, "fetched_at": datetime.now(HK).isoformat()}
+
+
+def query_cloud_brokers(target):
+    from cloud_store import get_store, CloudDataError
+    store = get_store()
+    # 精确日期查询；不把其他日期或实时记录冒充历史数据。
+    if target in store.dates("broker_history"):
+        frame, record = store.read("broker_history", target)
+    else:
+        frame, record = store.read("brokers", target)
+    metadata = record.get("metadata", {})
+    if metadata.get("date_basis") == "trading_calendar_offset":
+        anchor = date.fromisoformat(metadata["anchor"])
+        if record["record_date"] != target.isoformat() or not isinstance(metadata.get("days_before"), int) or metadata["days_before"] <= 0 or anchor <= target:
+            raise CloudDataError("云端历史券商日期元数据无效")
+    elif response_date(frame) != target:
+        raise CloudDataError("云端券商数据日期校验未通过")
+    return {"date": target, "frame": frame, "fetched_at": record["fetched_at"], "backend": "supabase"}
 
 
 def render_broker_history():
@@ -68,11 +84,15 @@ def render_broker_history():
             st.session_state.pop("broker_history_result", None)
             try:
                 with st.spinner("正在查询交易日历和券商数据…"):
-                    client = FutuClient()
-                    with socket.create_connection((client.host, client.port), timeout=1):
-                        pass
-                    with client:
-                        result = query_brokers_on_date(client, target)
+                    from cloud_store import uses_cloud
+                    if uses_cloud():
+                        result = query_cloud_brokers(target)
+                    else:
+                        client = FutuClient()
+                        with socket.create_connection((client.host, client.port), timeout=1):
+                            pass
+                        with client:
+                            result = query_brokers_on_date(client, target)
                 st.session_state.broker_history_result = result
             except Exception as exc:
                 st.error(f"查询未完成：{exc}")
@@ -81,8 +101,14 @@ def render_broker_history():
             return
         frame = result["frame"]
         st.markdown(f"**查询结果 · {result['date']}**")
-        st.caption(f"已核对接口返回日期 · days_before={result['days_before']} · 基准日 {result['anchor']}"
-                   f" · 取数时间 {datetime.fromisoformat(result['fetched_at']):%Y-%m-%d %H:%M:%S}（香港时间）")
+        if result.get("backend") == "supabase":
+            synced = datetime.fromisoformat(result["fetched_at"]).astimezone(HK)
+            st.caption(f"数据来自 Supabase · 交易日期 {result['date']} · 最近同步 {synced:%Y-%m-%d %H:%M:%S}（香港时间）")
+            if frame.is_real_time.eq(True).any():
+                st.caption("这份数据采集自当时的实时累计榜单，不保证是该日收盘汇总；历史接口记录同步后优先使用。")
+        else:
+            st.caption(f"日期按交易日历计算 · days_before={result['days_before']} · 基准日 {result['anchor']}"
+                       f" · 取数时间 {datetime.fromisoformat(result['fetched_at']):%Y-%m-%d %H:%M:%S}（香港时间）")
         if result["date"] == today:
             st.info("当前选择的是今日，以下为截至接口更新时间的累计数据，并非收盘汇总。")
         buy_column, sell_column = st.columns(2)
@@ -99,6 +125,7 @@ def render_broker_history():
                     st.dataframe(rows[["broker_name", "net_vol"]].style.set_properties(**{
                         "background-color": "#fff", "color": "#171717"}), hide_index=True, width="stretch")
         with st.expander("查看完整原始字段"):
+            st.caption("历史交易日期由交易日历与 days_before 换算；data_time / data_time_str 为接口原始更新时间，可能与交易日期不同。")
             st.dataframe(frame.style.set_properties(**{"background-color": "#ffffff", "color": "#171717"}),
                          hide_index=True, width="stretch")
         st.download_button("下载该日原始 CSV", frame.to_csv(index=False).encode("utf-8-sig"),

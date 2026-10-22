@@ -11,6 +11,10 @@ from data_sources import FutuClient, market
 
 @st.cache_data(ttl=30, show_spinner=False)
 def load_recent_trades():
+    from cloud_store import uses_cloud, get_store
+    if uses_cloud():
+        frame, record = get_store().read("ticker")
+        return frame, record["fetched_at"]
     client = FutuClient()
     with socket.create_connection((client.host, client.port), timeout=1):
         pass
@@ -43,7 +47,9 @@ def render_trade_ticker():
         with st.spinner("正在获取最近逐笔成交…"):
             frame, fetched_at = load_recent_trades()
     except Exception as exc:
-        st.warning("逐笔成交暂不可用，请确认 OpenD 已启动、登录且具备行情权限。")
+        from cloud_store import uses_cloud
+        st.warning("云端逐笔成交暂不可用，请检查本机采集程序是否已同步样本。" if uses_cloud()
+                   else "逐笔成交暂不可用，请确认 OpenD 已启动、登录且具备行情权限。")
         with st.expander("错误详情"):
             st.code(str(exc), language=None)
         return
@@ -51,8 +57,14 @@ def render_trade_ticker():
         st.caption("接口未返回最近成交记录。")
         return
     times = pd.to_datetime(frame.time, errors="coerce")
+    from cloud_store import uses_cloud
+    if uses_cloud():
+        synced = datetime.fromisoformat(fetched_at).astimezone(ZoneInfo("Asia/Hong_Kong"))
+        st.caption(f"Supabase 样本最近同步：{synced:%Y-%m-%d %H:%M:%S}（香港时间）；刷新仅重读云端。")
+        if (datetime.now(ZoneInfo("Asia/Hong_Kong")) - synced).total_seconds() > 180:
+            st.warning("样本同步已超过3分钟，以下为上次成功采集的成交记录。")
     st.caption(f"样本共 {len(frame)} 笔 · 成交时间 {times.min()} → {times.max()} · 香港时间"
-               f" · 取数 {datetime.fromisoformat(fetched_at):%Y-%m-%d %H:%M:%S}")
+               f" · 取数 {datetime.fromisoformat(fetched_at).astimezone(ZoneInfo('Asia/Hong_Kong')):%Y-%m-%d %H:%M:%S}")
     ranked = rank_recent_trades(frame, direction, sort, limit=limit)
     view = ranked[["price", "volume", "turnover", "time", "ticker_direction", "sequence", "type"]].copy()
     view["ticker_direction"] = view.ticker_direction.map({"BUY": "主动买入", "SELL": "主动卖出", "NEUTRAL": "中性"}).fillna(view.ticker_direction)
