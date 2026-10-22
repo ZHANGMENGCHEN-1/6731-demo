@@ -1,5 +1,6 @@
 """06731 主看板：行情与当日券商净买卖；不生成分析结论。"""
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 from html import escape
 import math
 import socket
@@ -23,15 +24,19 @@ def load_market_home():
     from cloud_store import uses_cloud, get_store
     if uses_cloud():
         result["backend"] = "supabase"
-        for dataset in ("snapshot", "brokers", "intraday"):
-            try:
-                frame, record = get_store().read(dataset)
-                result[dataset] = frame
-                result.setdefault("sync_times", {})[dataset] = record["fetched_at"]
-                if dataset == "snapshot":
-                    result["fetched_at"] = record["fetched_at"]
-            except ValueError as exc:
-                result["errors"][dataset] = str(exc)
+        store = get_store()
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            pending = {dataset: pool.submit(store.read, dataset)
+                       for dataset in ("snapshot", "brokers", "intraday")}
+            for dataset, future in pending.items():
+                try:
+                    frame, record = future.result()
+                    result[dataset] = frame
+                    result.setdefault("sync_times", {})[dataset] = record["fetched_at"]
+                    if dataset == "snapshot":
+                        result["fetched_at"] = record["fetched_at"]
+                except ValueError as exc:
+                    result["errors"][dataset] = str(exc)
         if not any(key in result for key in ("snapshot", "brokers", "intraday")):
             result["errors"]["connection"] = "云端尚无可读取的行情，请检查同步程序和 Supabase 配置。"
         return result

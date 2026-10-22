@@ -92,11 +92,11 @@ class SupabaseStore:
             raise CloudDataError(f"Supabase HTTP {response.status_code}：{hint}")
         return response.json() if response.content else None
 
-    def _get(self, params):
+    def _get(self, params, *, ttl=30):
         key = json.dumps(params, sort_keys=True)
         with self._lock:
             cached = self._cache.get(key)
-            if cached and time.monotonic() - cached[0] < 30:
+            if cached and time.monotonic() - cached[0] < ttl:
                 return cached[1]
         data = self._request("GET", params=params)
         with self._lock:
@@ -117,6 +117,12 @@ class SupabaseStore:
             offset += len(page)
 
     def read(self, dataset, day=None, code="HK.06731"):
+        if dataset == "ccass" and day is not None:
+            # 日快照批量读取，避免每次进入持仓页串行请求全部日期。
+            for row in self.read_ccass_records(code):
+                if row["record_date"] == str(day):
+                    return unpack_frame(row["payload"]), row
+            # 新增日期可能尚未进入批量缓存；单独读取，保持新数据可见。
         params = {"select": "*", "dataset": "eq." + dataset, "code": "eq." + code,
                   "order": "record_date.desc,fetched_at.desc", "limit": 1}
         if day is not None:
@@ -126,6 +132,16 @@ class SupabaseStore:
             raise CloudDataError(f"云端还没有 {dataset}{' / ' + str(day) if day else ''} 数据，请运行本机同步程序。")
         row = rows[0]
         return unpack_frame(row["payload"]), row
+
+    def read_ccass_records(self, code="HK.06731"):
+        rows, offset = [], 0
+        while True:
+            page = self._get({"select": "*", "dataset": "eq.ccass", "code": "eq." + code,
+                              "order": "record_date.asc", "limit": 100, "offset": offset}, ttl=300)
+            rows.extend(page)
+            if len(page) < 100:
+                return rows
+            offset += len(page)
 
     def write(self, dataset, day, frame, *, code="HK.06731", metadata=None, fetched_at=None):
         if self.read_only:
