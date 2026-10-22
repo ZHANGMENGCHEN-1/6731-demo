@@ -5,6 +5,8 @@ import time
 
 import streamlit as st
 
+from cloud_store import uses_cloud, get_store
+
 
 class AutoCCASSUpdater:
     def __init__(self, interval=900, update=None):
@@ -46,7 +48,6 @@ def _updater():
 
 
 def start_auto_update():
-    from cloud_store import uses_cloud, get_store
     if uses_cloud():
         try:
             dates = get_store().dates("ccass")

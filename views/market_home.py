@@ -7,6 +7,7 @@ import socket
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+import altair as alt
 import streamlit as st
 
 from data_sources import FutuClient, brokers, market
@@ -91,7 +92,97 @@ def source_time(frame, field):
     return " / ".join(values.unique()) if not values.empty else "未提供"
 
 
-def render_leader(frame, title, color):
+def net_volume_ratio(net_volume, outstanding_shares):
+    """带方向的净量占流通股本比例；缺失或零股本不计算。"""
+    try:
+        net_volume, outstanding_shares = float(net_volume), float(outstanding_shares)
+        if math.isfinite(net_volume) and math.isfinite(outstanding_shares) and outstanding_shares > 0:
+            return net_volume / outstanding_shares * 100
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def prepare_intraday(frame):
+    prices = frame.copy()
+    if "is_blank" in prices:
+        prices = prices.loc[~prices.is_blank.fillna(False).astype(bool)].copy()
+    prices["time"] = pd.to_datetime(prices.time, errors="coerce")
+    prices["cur_price"] = pd.to_numeric(prices.cur_price, errors="coerce")
+    prices = prices.loc[prices.cur_price.gt(0) & prices.cur_price.lt(float("inf"))]
+    prices = prices.dropna(subset=["time", "cur_price"]).sort_values("time")
+    prices = prices.drop_duplicates("time", keep="last")
+    volume = prices["volume"] if "volume" in prices else pd.Series(index=prices.index, dtype=float)
+    prices["volume"] = pd.to_numeric(volume, errors="coerce")
+    prices["volume"] = prices.volume.where(prices.volume.ge(0) & prices.volume.lt(float("inf")))
+    prices["direction"] = "平盘"
+    changes = prices.cur_price.diff()
+    prices.loc[changes.gt(0), "direction"] = "上涨"
+    prices.loc[changes.lt(0), "direction"] = "下跌"
+    return prices[["time", "cur_price", "volume", "direction"]]
+
+
+def intraday_chart(prices):
+    """单一画布内绘制上下价量区，独立纵轴、统一时间和悬停位置。"""
+    cursor = alt.selection_point(
+        fields=["time"], encodings=["x"], nearest=True,
+        on="pointerover", clear="pointerout", empty=False,
+    )
+    base = alt.Chart(prices).encode(
+        x=alt.X("time:T", title="香港时间", axis=alt.Axis(format="%H:%M", tickCount=5))
+    )
+    tooltip = [alt.Tooltip("time:T", title="时间", format="%H:%M"),
+               alt.Tooltip("cur_price:Q", title="价格（HKD）", format=".3f"),
+               alt.Tooltip("volume:Q", title="该分时段成交量（股）", format=",.0f")]
+    price_axis = alt.Axis(title="价格（HKD）", grid=False, tickCount=5, domain=False)
+    low, high = float(prices.cur_price.min()), float(prices.cur_price.max())
+    margin = max((high - low) * 0.05, abs(high) * 0.0005, 0.001)
+    # 悬停图层筛选后只剩一个点，必须与主价格线固定使用同一数值范围。
+    price_scale = alt.Scale(domain=[low - margin, high + margin],
+                            zero=False, nice=False, range=[225, 0])
+    price = base.mark_line(color="#803b4b", strokeWidth=1.8, clip=True).encode(
+        y=alt.Y("cur_price:Q", scale=price_scale, axis=price_axis)
+    )
+    volume = base.mark_bar(size=2, clip=True).encode(
+        y=alt.Y("volume:Q", stack=None,
+                scale=alt.Scale(zero=True, range=[330, 250]),
+                axis=alt.Axis(title="成交量（股）", orient="right", grid=False,
+                              format="~s", tickCount=3, domain=False)),
+        y2=alt.value(330),
+        color=alt.Color("direction:N", scale=alt.Scale(
+            domain=["上涨", "下跌", "平盘"], range=[SELL, BUY, "#a8a29e"]), legend=None),
+        tooltip=tooltip,
+    )
+    # 最近时间点的命中区域贯穿价量区；提示直接使用原始记录，不作求和。
+    hover = base.mark_point(opacity=0).encode(y=alt.value(0), tooltip=tooltip).add_params(cursor)
+    rule = base.mark_rule(color="#a8a29e", strokeDash=[3, 3]).encode(
+        opacity=alt.condition(cursor, alt.value(0.8), alt.value(0)), tooltip=tooltip
+    )
+    horizontal = base.transform_filter(cursor).mark_rule(
+        color="#a8a29e", strokeDash=[3, 3]
+    ).encode(
+        x=alt.value(0),
+        x2=alt.value(alt.ExprRef(expr="width")),
+        y=alt.Y("cur_price:Q", scale=price_scale, axis=None),
+        tooltip=tooltip,
+    )
+    selected_point = base.transform_filter(cursor).mark_point(
+        color="#803b4b", filled=True, size=35
+    ).encode(
+        y=alt.Y("cur_price:Q", scale=price_scale, axis=None),
+        tooltip=tooltip,
+    )
+    separator = alt.Chart(pd.DataFrame({"separator": [0]})).mark_rule(
+        color="#e6e0d8"
+    ).encode(y=alt.value(240))
+    return alt.layer(price, volume, separator, hover, rule, horizontal, selected_point).resolve_scale(y="independent").properties(
+        width="container", height=330,
+        autosize=alt.AutoSizeParams(type="fit-x", contains="padding", resize=True),
+        padding={"left": 0, "right": 0, "top": 8, "bottom": 0},
+    ).configure_view(stroke=None)
+
+
+def render_leader(frame, title, color, outstanding_shares=None):
     if frame.empty:
         st.metric(title, "—")
         st.caption("当前没有可展示的对应方向数据")
@@ -99,10 +190,13 @@ def render_leader(frame, title, color):
     leader = frame.iloc[0]
     ties = frame.loc[frame.net_vol == leader.net_vol]
     names = "、".join(ties.broker_name.astype(str))
+    ratio = net_volume_ratio(leader.net_vol, outstanding_shares)
+    ratio_text = f'{number(ratio, 4, signed=True)}%' if ratio is not None else "—"
     st.html(f'<div class="mh-leader" style="--rank-color:{color}">'
             f'<div class="mh-kicker">{escape(title)}</div>'
-            f'<h3>{escape(names)}</h3><div class="mh-leader-value">'
-            f'{number(leader.net_vol, signed=True)} <small>股</small></div>'
+            f'<h3>{escape(names)}</h3><div class="mh-leader-figures">'
+            f'<div class="mh-leader-value">{number(leader.net_vol, signed=True)} <small>股</small></div>'
+            f'<div class="mh-leader-ratio"><strong>{ratio_text}</strong><span>占流通股本</span></div></div>'
             f'<p>净买卖量 · 当日累计{" · 并列" if len(ties) > 1 else ""}</p></div>')
 
 
@@ -195,11 +289,20 @@ def render_market_content(status=None):
     except ValueError as exc:
         st.error(str(exc))
         buys, sells = pd.DataFrame(), pd.DataFrame()
+    outstanding_shares = None
+    if snapshot is not None and not snapshot.empty and broker_frame is not None and not broker_frame.empty:
+        quote_date = pd.to_datetime(snapshot.iloc[0].get("update_time"), errors="coerce")
+        broker_dates = pd.to_datetime(broker_frame["data_time_str"], errors="coerce")
+        if pd.notna(quote_date) and broker_dates.notna().all() and broker_dates.dt.date.eq(quote_date.date()).all():
+            outstanding_shares = snapshot.iloc[0].get("outstanding_shares")
+    if not buys.empty or not sells.empty:
+        if net_volume_ratio(0, outstanding_shares) is None:
+            st.caption("流通股本未提供、无效或与券商数据日期不一致，占比暂不可用。")
     left, right = st.columns(2)
     with left:
-        render_leader(buys, "净买入最多", BUY)
+        render_leader(buys, "净买入最多", BUY, outstanding_shares)
     with right:
-        render_leader(sells, "净卖出最多", SELL)
+        render_leader(sells, "净卖出最多", SELL, outstanding_shares)
 
     control, hint = st.columns([1, 3])
     with control:
@@ -208,18 +311,19 @@ def render_market_content(status=None):
                                      label_visibility="collapsed") or 5
     with hint:
         st.caption("净买卖为当日累计；条长按各榜最大净量分别缩放。")
-    chart, buy_column, sell_column = st.columns([1.15, 1, 1], gap="small")
+    chart, buy_column, sell_column = st.columns([1.8, 1, 1], gap="medium")
     with chart:
         with st.container(border=True, key="intraday_panel"):
             st.html('<div class="mh-chart-heading" role="heading" aria-level="4">当日分时</div>')
             intraday = data.get("intraday")
             if intraday is not None and not intraday.empty and {"time", "cur_price"}.issubset(intraday):
-                prices = intraday[["time", "cur_price"]].copy()
-                prices["time"] = pd.to_datetime(prices.time, errors="coerce")
-                prices["cur_price"] = pd.to_numeric(prices.cur_price, errors="coerce")
-                prices = prices.dropna().sort_values("time")
-                st.line_chart(prices, x="time", y="cur_price", color="#803b4b", height=190,
-                              x_label="香港时间", y_label="价格（HKD）")
+                prices = prepare_intraday(intraday)
+                if not prices.empty:
+                    st.altair_chart(intraday_chart(prices), width="stretch")
+                    if prices.volume.isna().all():
+                        st.caption("成交量数据暂不可用。")
+                else:
+                    st.info("暂无有效分时数据。")
                 st.caption(f"分时数据截至：{prices.time.max() if not prices.empty else '暂无'}")
             else:
                 st.info("暂无分时数据，行情权限不足或未开市时可能无法获取。")
@@ -274,6 +378,9 @@ def render_market_home():
     .stMainBlockContainer:has(.mh-home-marker) h4 {font-size:15px;padding:0;margin:0;}
     .mh-chart-heading {display:block;box-sizing:border-box;min-height:38px;padding:2px 0 12px;font-size:15px;font-weight:600;line-height:24px;}
     .stMainBlockContainer .st-key-intraday_panel [data-testid="stVerticalBlock"] {gap:1rem;}
+    .st-key-intraday_panel {min-width:0;overflow:hidden;}
+    .st-key-intraday_panel [data-testid="stVegaLiteChart"] {width:100%;min-width:0;max-width:100%;}
+    .st-key-intraday_panel .vega-embed {width:100%;min-width:0;max-width:100%;}
     .stMainBlockContainer:has(.mh-home-marker) [data-testid="stMetric"] {padding:9px 12px;border-top-width:2px;}
     .stMainBlockContainer:has(.mh-home-marker) [data-testid="stMetricValue"],
     .stMainBlockContainer:has(.mh-home-marker) [data-testid="stMetricValue"] * {font-size:32px!important;font-weight:700!important;line-height:1.25;}
@@ -302,10 +409,14 @@ def render_market_home():
     .mh-leader {background:#fff;border:1px solid #d4ccc2;border-left:3px solid var(--rank-color);border-radius:8px;padding:12px 16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 18px;align-items:center;}
     .mh-kicker {font-size:12px;color:#645f59;letter-spacing:1px;}
     .mh-leader h3 {font-size:15px!important;margin:0!important;padding:0;overflow-wrap:anywhere;grid-column:1;grid-row:2;}
-    .mh-leader-value {color:var(--rank-color);font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;grid-column:2;grid-row:1 / 3;}
+    .mh-leader-figures {grid-column:2;grid-row:1 / 4;text-align:right;min-width:0;font-variant-numeric:tabular-nums;}
+    .mh-leader-value {color:var(--rank-color);font-size:25px;font-weight:700;overflow-wrap:anywhere;}
     .mh-leader-value small {font-size:13px;font-weight:400;}
-    .mh-leader p {font-size:11px;line-height:1.6;color:#645f59;margin:0;grid-column:1 / 3;}
-    .mh-rank-list {padding-right:4px;}
+    .mh-leader-ratio {display:flex;justify-content:flex-end;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin-top:4px;font-size:12px;}
+    .mh-leader-ratio strong {color:var(--rank-color);font-size:16px;}
+    .mh-leader-ratio span {color:#645f59;}
+    .mh-leader p {font-size:11px;line-height:1.6;color:#645f59;margin:0;grid-column:1;grid-row:3;}
+    .mh-rank-list {max-height:355px;overflow-y:auto;scrollbar-gutter:stable;padding-right:4px;}
     .mh-rank-row {display:flex;gap:8px;padding:9px 0;border-bottom:1px solid #eee8df;}
     .mh-rank-number {color:#918377;font-size:12px;padding-top:2px;min-width:20px;}
     .mh-rank-body {flex:1;min-width:0;}
@@ -320,7 +431,19 @@ def render_market_home():
     .mh-update-strip,.mh-kicker,.mh-leader p,.mh-rank-number,.mh-rank-label,
     .stMainBlockContainer:has(.mh-home-marker) [data-testid="stCaptionContainer"],
     .stMainBlockContainer:has(.mh-home-marker) [data-testid="stCaptionContainer"] p {font-size:var(--cc-text-size,13px)!important;line-height:1.65;}
-    @media(max-width:800px) {.mh-leader {display:block;} .mh-leader-value {font-size:22px;} .mh-rank-label {flex-wrap:wrap;} }
+    @media(max-width:1100px) {
+        .st-key-market_section [data-testid="stMetricValue"],
+        .st-key-market_section [data-testid="stMetricValue"] * {font-size:clamp(18px,2.2vw,28px)!important;}
+        .mh-rank-label {flex-wrap:wrap;gap:2px 8px;}
+    }
+    @media(max-width:800px) {
+        .st-key-market_section {padding:12px;}
+        .mh-leader {grid-template-columns:minmax(0,1fr);gap:6px;}
+        .mh-leader-figures {grid-column:1;grid-row:3;text-align:left;}
+        .mh-leader-ratio {justify-content:flex-start;}
+        .mh-leader p {grid-row:4;}
+        .mh-leader-value {font-size:22px;}
+    }
     </style>''')
     st.html('<span class="mh-home-marker"></span>')
     with st.container(key="market_section"):
