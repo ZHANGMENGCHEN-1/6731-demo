@@ -108,7 +108,7 @@ def render_leader(frame, title, color):
 
 def render_ranking(frame, title, color, limit):
     with st.container(border=True):
-        st.markdown(f"#### {title}")
+        st.markdown(f"#### {title} · Top {limit}")
         if frame.empty:
             st.info("暂无对应方向数据。")
             return
@@ -124,6 +124,8 @@ def render_ranking(frame, title, color, limit):
                 f'<div class="mh-track"><div style="width:{percent:.3f}%;background:{color}"></div>'
                 '</div></div></div>')
         st.html('<div class="mh-rank-list">' + "".join(rows) + '</div>')
+        if len(frame) < limit:
+            st.caption(f"当前接口仅返回 {len(frame)} 家符合该方向的券商。")
 
 
 def render_market_content(status=None):
@@ -149,7 +151,6 @@ def render_market_content(status=None):
         '</div>'
     )
     if is_cloud:
-        st.caption("数据来源：Supabase · 刷新仅重读云端，最新数据由本机采集程序上传。")
         if (datetime.now(HK) - fetched).total_seconds() > 180:
             st.warning("最近同步已超过3分钟，当前展示上次成功采集的数据，请检查本机采集程序是否仍在运行。")
     if snapshot is not None and not snapshot.empty:
@@ -304,7 +305,7 @@ def render_market_home():
     .mh-leader-value {color:var(--rank-color);font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;grid-column:2;grid-row:1 / 3;}
     .mh-leader-value small {font-size:13px;font-weight:400;}
     .mh-leader p {font-size:11px;line-height:1.6;color:#645f59;margin:0;grid-column:1 / 3;}
-    .mh-rank-list {max-height:236px;overflow-y:auto;padding-right:4px;}
+    .mh-rank-list {padding-right:4px;}
     .mh-rank-row {display:flex;gap:8px;padding:9px 0;border-bottom:1px solid #eee8df;}
     .mh-rank-number {color:#918377;font-size:12px;padding-top:2px;min-width:20px;}
     .mh-rank-body {flex:1;min-width:0;}

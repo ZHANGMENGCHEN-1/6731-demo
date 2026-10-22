@@ -81,6 +81,10 @@ def render_dashboard(view="主看板"):
 
 def render_participant_page():
     """两种独立数据路径用页内切换组织，避免上下重复堆叠。"""
+    if st.session_state.get("participant_workspace_view") == "participant_comparison":
+        from views.participant_comparison import render_participant_comparison
+        render_participant_comparison()
+        return
     with st.container(key="participant_workspace"):
         choices = [route for _, route, _ in PARTICIPANT_MENU]
         value = st.session_state.get("participant_workspace_view")

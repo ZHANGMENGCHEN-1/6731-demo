@@ -45,7 +45,7 @@ def relative_history(history):
 
 def render_participant_comparison():
     with st.container(key="multi_participant_workspace"):
-        st.subheader("多参与者对比")
+        st.subheader("查询多参与者持仓对比")
         st.caption("选择多家 CCASS 参与者，对比相对期初的持股变化；下方表格保留实际持仓。")
         try:
             data = get_monitoring_data()
