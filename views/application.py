@@ -180,7 +180,7 @@ def render_app():
 
     if page == "💬 AI 对话助手":
         with st.container(key="assistant_section"):
-            with st.container(key="assistant_content"):
+            with st.container(key="assistant_content", width=796):
                 render_assistant()
         st.stop()
 
