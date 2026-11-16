@@ -45,9 +45,11 @@ TOOLS = {name: getattr(analysis, name) for name in (
     "compare_dates", "get_top_increases", "get_top_decreases", "get_participant_history",
     "get_persistent_increases", "get_persistent_decreases", "get_dataset_info")}
 TOOLS.update({name: getattr(assistant_tools, name) for name in (
-    "get_market_quote", "get_broker_net_trades", "get_recent_trade_ranking", "compare_participant_holdings")})
+    "get_market_quote", "get_broker_net_trades", "get_broker_net_summary", "get_broker_activity", "get_recent_trade_ranking", "compare_participant_holdings")})
 
 TOOL_GUIDE = {
+    "get_broker_net_summary": "start_date,end_date(可省略,YYYY-MM-DD),top_n(默认5)；近一个月主要交易在哪些券商、区间累计净买卖用此工具，一次调用按券商累加已保存每日十大榜的带符号net_vol，再分买卖排名。默认近30个自然日含今天；不是完整月度净额或总成交活跃度。",
+    "get_broker_activity": "start_date,end_date(可省略,YYYY-MM-DD),metric(成交数量/成交金额,默认成交数量),top_n(默认10)；一次调用汇总区间券商总交易活跃度，默认最近一个自然月截至今天。仅汇总已保存实时榜样本，返回覆盖与缺失说明，不能冒充全市场完整排名。不是净买卖。",
     "get_dataset_info": "无参数；CCASS可用快照日期和统计定义。",
     "compare_dates": "start_date,end_date(YYYY-MM-DD)；CCASS全体参与者区间持仓变动。",
     "get_top_increases": "start_date,end_date,top_n(默认10)；CCASS增持排名。",
@@ -125,7 +127,9 @@ def _direct_query_plan(context):
     """仅匹配完整、独立且无歧义的常见问题；其他内容交给模型。"""
     text = re.sub(r"[\s，。？！、,.?!：:]", "", context.question).casefold()
     calls = None
-    if text in ("06731最近可用的股价涨跌幅和成交额是多少", "06731现在股价多少", "06731最新价是多少", "现在股价多少", "最新股价是多少"):
+    if text == "最近一个月中主要交易发生在哪几个券商":
+        calls = [{"tool": "get_broker_net_summary", "arguments": {}}]
+    elif text in ("06731最近可用的股价涨跌幅和成交额是多少", "06731现在股价多少", "06731最新价是多少", "现在股价多少", "最新股价是多少"):
         calls = [{"tool": "get_market_quote", "arguments": {}}]
     elif text == "昨天的券商净买卖情况怎么样":
         day = datetime.now(ZoneInfo("Asia/Hong_Kong")).date() - timedelta(days=1)
@@ -160,6 +164,8 @@ def plan_query(context):
         + "。只支持06731，其他股票、下单交易和未提供的字段应澄清。"
         "输出纯JSON：{\"calls\":[{\"tool\":\"工具名\",\"arguments\":{}}],\"clarification\":null}。"
         "最多4个调用；问题缺少关键信息或超出支持范围时calls=[]，clarification填中文说明/问题。"
+        "推荐问题最近一个月中主要交易发生在哪几个券商，按约定用get_broker_net_summary给榜内累计净买卖排名，解释其非总成交活跃度；区间净买卖也用此工具，不拆为每天调用。"
+        "用户明确要求总成交活跃度、买入量+卖出量或总成交金额时用get_broker_activity，不用净额替代。"
         "根据对话理解追问，但历史回复里的数字不是本次证据。禁止猜参与者编号，优先传用户给的名称。"
         "CCASS变化与券商交易是不同口径，问题同时涉及两者时分别调用。"
         "CCASS未指定日期用可用快照日期：最近变化=最新两个日期，上市以来=最早至最新；单日不自动改成区间。"
@@ -232,6 +238,9 @@ def build_llm_messages(context):
               "无法获取的数据、部分工具失败、证据截断须明确说明，不用其他日期替代。"
               "券商净买卖是经纪渠道成交，不等于自营投资或持仓变化。逐笔方向不含券商身份，最近样本Top不是全天Top。"
               "不自行计算持仓，优先使用工具算好的汇总。"
+              "券商活跃度必须使用get_broker_activity的总成交量/金额排名，同时注明请求区间、实际覆盖日期和每日十大榜样本限制；无数据不改用净额。"
+              "get_broker_net_summary用于推荐问题最近一个月中主要交易发生在哪几个券商：直接列榜内累计净买入/净卖出各前五（按工具top_n），不再询问单日或声称只能查4天。"
+              "必须说明是榜内累计净买卖，不是总成交活跃度；给出区间和覆盖天数，未上榜日未知，因此不是完整月度净额。"
               "默认简洁回答，优先给用户所问结果；没有要求时不延伸分析或重复大表。"
               "Participant 是结算后持仓位置，不等于最终实益拥有人，不代表实时交易。"
               "不能据此确认直接筹码转移。缺失数据或工具错误须明确说明。"

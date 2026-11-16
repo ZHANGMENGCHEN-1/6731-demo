@@ -143,6 +143,31 @@ class SupabaseStore:
                 return rows
             offset += len(page)
 
+    def read_broker_activity_records(self, start, end, code="HK.06731"):
+        """Only saved realtime daily snapshots retain gross volume/turnover."""
+        rows, offset = [], 0
+        while True:
+            page = self._get({"select": "*", "dataset": "eq.brokers", "code": "eq." + code,
+                              "and": f"(record_date.gte.{start},record_date.lte.{end})",
+                              "order": "record_date.asc", "limit": 100, "offset": offset})
+            rows.extend(page)
+            if len(page) < 100:
+                return rows
+            offset += len(page)
+
+    def read_broker_net_records(self, start, end, code="HK.06731"):
+        """Read both sources; the caller chooses one snapshot per trading date."""
+        rows, offset = [], 0
+        while True:
+            page = self._get({"select": "*", "dataset": "in.(broker_history,brokers)",
+                              "code": "eq." + code,
+                              "and": f"(record_date.gte.{start},record_date.lte.{end})",
+                              "order": "record_date.asc,dataset.asc", "limit": 100, "offset": offset})
+            rows.extend(page)
+            if len(page) < 100:
+                return rows
+            offset += len(page)
+
     def write(self, dataset, day, frame, *, code="HK.06731", metadata=None, fetched_at=None):
         if self.read_only:
             raise CloudDataError("网页数据连接仅允许读取")
