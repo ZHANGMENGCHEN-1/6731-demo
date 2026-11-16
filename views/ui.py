@@ -185,6 +185,31 @@ body:has(.st-key-participant_workspace) [data-baseweb="popover"] [role="option"]
 .cc-helper,.cc-notice,.cc-hero p,.cc-badge {font-size:var(--cc-text-size)!important;line-height:1.65;}
 .stMainBlockContainer [data-testid="stMarkdownContainer"] > p:has(> strong:only-child) > strong {font-size:var(--cc-title-size);font-weight:600;}
 .st-key-top_navigation button p {font-size:var(--cc-title-size)!important;}
+/* Mobile navigation stays in document flow; desktop rules above are unchanged. */
+@media(max-width:768px) {
+  .st-key-top_navigation {
+    position:static; height:auto; min-width:0; padding:0 0 4px;
+  }
+  .stMainBlockContainer:has(.st-key-top_navigation) {padding-top:8px;}
+  .st-key-top_navigation [data-testid="stHorizontalBlock"] {
+    display:grid!important; grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:0!important; align-items:center;
+  }
+  .st-key-top_navigation [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    width:100%!important; min-width:0!important; max-width:100%;
+  }
+  .st-key-top_navigation [data-testid="stColumn"]:first-child {grid-column:1 / -1;}
+  .st-key-top_navigation [data-testid="stColumn"]:nth-child(6) {display:none;}
+  .st-key-top_navigation .cc-nav-logo {height:44px;padding-left:44px;}
+  .st-key-top_navigation .cc-nav-logo strong {font-size:17px;letter-spacing:0;}
+  .st-key-top_navigation button {
+    width:100%; height:44px; min-height:44px; min-width:0;
+    padding:8px 2px; gap:2px;
+  }
+  .st-key-top_navigation button p {font-size:clamp(11px,3.2vw,14px)!important;white-space:nowrap;}
+  .st-key-top_navigation [data-testid="stPopover"],
+  .st-key-top_navigation [data-testid="stButton"] {min-width:0; width:100%;}
+}
 @media(max-width:640px) {
   .stMainBlockContainer { padding-top:1.5rem; padding-left:1rem; padding-right:1rem; }
   [data-testid="stHeadingWithActionElements"] h1 { font-size:24px; }
